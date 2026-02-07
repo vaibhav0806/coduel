@@ -1,6 +1,6 @@
 import { View, Text, Pressable, ScrollView, Alert, ActivityIndicator } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Ionicons, FontAwesome5 } from "@expo/vector-icons";
+import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { router, useFocusEffect } from "expo-router";
 import { useState, useCallback } from "react";
@@ -140,7 +140,7 @@ export default function ProfileScreen() {
   if (!profile) {
     return (
       <SafeAreaView className="flex-1 bg-dark items-center justify-center">
-        <ActivityIndicator size="large" color="#6366F1" />
+        <ActivityIndicator size="large" color="#39FF14" />
       </SafeAreaView>
     );
   }
@@ -175,7 +175,7 @@ export default function ProfileScreen() {
         {/* Profile Header */}
         <View className="items-center pt-6 pb-4">
           <View className="w-24 h-24 rounded-full bg-dark-card border-2 border-primary items-center justify-center mb-3">
-            <FontAwesome5 name="user" size={40} color="#6366F1" />
+            <Ionicons name="person" size={40} color="#39FF14" />
           </View>
 
           <Text className="text-2xl font-bold text-white">@{profile.username}</Text>
@@ -270,7 +270,7 @@ export default function ProfileScreen() {
           <Text className="text-white font-bold text-lg mb-4">Recent Matches</Text>
 
           {loadingHistory ? (
-            <ActivityIndicator size="small" color="#6366F1" />
+            <ActivityIndicator size="small" color="#39FF14" />
           ) : matchHistory.length === 0 ? (
             <Text className="text-gray-500 text-center py-4">
               No matches yet. Go battle!

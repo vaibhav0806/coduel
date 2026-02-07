@@ -64,7 +64,7 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
     return (
       <View className="flex-1 bg-dark items-center justify-center">
         <Text className="text-4xl mb-4">⚡</Text>
-        <ActivityIndicator size="large" color="#6366F1" />
+        <ActivityIndicator size="large" color="#39FF14" />
       </View>
     );
   }

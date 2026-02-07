@@ -253,7 +253,7 @@ export default function LeaderboardScreen() {
 
       {loading ? (
         <View className="flex-1 items-center justify-center">
-          <ActivityIndicator size="large" color="#6366F1" />
+          <ActivityIndicator size="large" color="#39FF14" />
         </View>
       ) : (
         <FlatList

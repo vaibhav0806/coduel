@@ -53,7 +53,7 @@ export function ShareCard({
       <View style={{ alignItems: "center" }}>
         <Text
           style={{
-            color: "#6366F1",
+            color: "#39FF14",
             fontSize: 28,
             fontWeight: "800",
             letterSpacing: 4,

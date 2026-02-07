@@ -47,7 +47,11 @@ function shuffleAndPick<T>(arr: T[], count: number): T[] {
   return shuffled.slice(0, count);
 }
 
-async function selectQuestions(userId: string, difficulty: number) {
+async function selectQuestions(
+  userId: string,
+  difficulty: number,
+  language: string | null = null
+) {
   // Get IDs of questions this user has already seen
   const { data: seen } = await supabase
     .from("user_question_history")
@@ -68,6 +72,11 @@ async function selectQuestions(userId: string, difficulty: number) {
     .lte("difficulty", maxDiff)
     .limit(20);
 
+  // Filter by language if specified
+  if (language) {
+    query = query.ilike("language", language);
+  }
+
   if (seenIds.length > 0) {
     query = query.not("id", "in", `(${seenIds.join(",")})`);
   }
@@ -84,6 +93,9 @@ async function selectQuestions(userId: string, difficulty: number) {
       .gte("difficulty", minDiff)
       .lte("difficulty", maxDiff)
       .limit(needed);
+    if (language) {
+      fallbackQuery = fallbackQuery.ilike("language", language);
+    }
     if (have.length > 0) {
       fallbackQuery = fallbackQuery.not("id", "in", `(${have.join(",")})`);
     }
@@ -91,7 +103,20 @@ async function selectQuestions(userId: string, difficulty: number) {
     questions = [...(questions ?? []), ...(fallback ?? [])];
   }
 
-  // Last resort: any questions regardless of difficulty
+  // Last resort: any questions (drop language filter if needed)
+  if (!questions || questions.length === 0) {
+    let fallbackQuery = supabase
+      .from("questions")
+      .select("id")
+      .limit(20);
+    if (language) {
+      fallbackQuery = fallbackQuery.ilike("language", language);
+    }
+    const { data: any20 } = await fallbackQuery;
+    questions = any20 ?? [];
+  }
+
+  // Ultimate fallback: any questions regardless of language
   if (!questions || questions.length === 0) {
     const { data: any20 } = await supabase
       .from("questions")
@@ -103,7 +128,11 @@ async function selectQuestions(userId: string, difficulty: number) {
   return shuffleAndPick(questions, 3);
 }
 
-export async function createBotMatch(userId: string, isRanked: boolean) {
+export async function createBotMatch(
+  userId: string,
+  isRanked: boolean,
+  language: string | null = null
+) {
   console.log("[Matchmaking] Creating bot match via direct DB...");
 
   // Get user profile
@@ -119,8 +148,8 @@ export async function createBotMatch(userId: string, isRanked: boolean) {
   const botName = generateBotName();
   const botRating = generateBotRating(profile.rating);
 
-  // Select questions
-  const questions = await selectQuestions(userId, difficulty);
+  // Select questions (with optional language filter)
+  const questions = await selectQuestions(userId, difficulty, language);
   console.log("[Matchmaking] Selected questions:", JSON.stringify(questions));
   if (questions.length === 0) throw new Error("No questions available");
 
@@ -181,7 +210,11 @@ type MatchQueueResult =
   | { status: "matched"; match_id: string; opponent_username: string; opponent_rating: number }
   | { status: "queued" };
 
-export async function joinMatchQueue(userId: string, isRanked: boolean): Promise<MatchQueueResult> {
+export async function joinMatchQueue(
+  userId: string,
+  isRanked: boolean,
+  language: string | null = null
+): Promise<MatchQueueResult> {
   console.log("[Matchmaking] Joining queue via direct DB...");
 
   const { data: profile } = await supabase
@@ -220,7 +253,7 @@ export async function joinMatchQueue(userId: string, isRanked: boolean): Promise
       console.log("[Matchmaking] Matched with human:", opp.user_id);
 
       const difficulty = getDifficultyForRating(profile.rating);
-      const questions = await selectQuestions(userId, difficulty);
+      const questions = await selectQuestions(userId, difficulty, language);
       if (questions.length === 0) throw new Error("No questions available");
 
       // Create match

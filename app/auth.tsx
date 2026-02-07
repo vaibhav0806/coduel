@@ -1,7 +1,7 @@
 import { View, Text, Pressable, ActivityIndicator, Alert, Platform } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
-import { Ionicons, FontAwesome } from "@expo/vector-icons";
+import { Ionicons } from "@expo/vector-icons";
 import { useState } from "react";
 import {
   GoogleSignin,
@@ -163,7 +163,7 @@ export default function AuthScreen() {
               <ActivityIndicator color="#4285F4" />
             ) : (
               <>
-                <FontAwesome name="google" size={20} color="#4285F4" />
+                <Ionicons name="logo-google" size={20} color="#4285F4" />
                 <Text className="text-gray-800 font-semibold ml-3 text-lg">
                   Continue with Google
                 </Text>
@@ -180,7 +180,7 @@ export default function AuthScreen() {
                 loading ? "opacity-50" : "active:bg-gray-100"
               }`}
             >
-              <FontAwesome name="apple" size={22} color="#000000" />
+              <Ionicons name="logo-apple" size={22} color="#000000" />
               <Text className="text-gray-800 font-semibold ml-3 text-lg">
                 Continue with Apple
               </Text>

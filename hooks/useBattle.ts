@@ -255,18 +255,20 @@ export function useBattle({
           winner: matchWinner,
           player_score: pScore,
           opponent_score: oScore,
-          rating_change: ratingChange,
+          rating_change: isRankedRef.current ? ratingChange : 0,
           is_comeback: isComeback,
         });
 
-        // Each player updates their own profile
-        updateProfileAfterMatch(
-          userId,
-          playerRating,
-          ratingChange,
-          matchWinner === "player",
-          isRankedRef.current
-        );
+        // Only update profile for ranked matches (practice mode doesn't affect rating/wins/losses)
+        if (isRankedRef.current) {
+          updateProfileAfterMatch(
+            userId,
+            playerRating,
+            ratingChange,
+            matchWinner === "player",
+            true
+          );
+        }
 
         // Only player1 updates the match record (to avoid double-writes)
         if (isPlayer1Ref.current) {

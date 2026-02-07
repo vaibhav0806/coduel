@@ -1,18 +1,21 @@
 import { Tabs } from "expo-router";
-import { FontAwesome5, Ionicons } from "@expo/vector-icons";
+import { Ionicons } from "@expo/vector-icons";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 export default function TabLayout() {
+  const insets = useSafeAreaInsets();
+
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: "#6366F1",
+        tabBarActiveTintColor: "#39FF14",
         tabBarInactiveTintColor: "#6B7280",
         tabBarStyle: {
-          backgroundColor: "#1A1A2E",
-          borderTopColor: "#2D2D44",
+          backgroundColor: "#0A0A0F",
+          borderTopColor: "#1A1A24",
           borderTopWidth: 1,
-          height: 60,
-          paddingBottom: 8,
+          height: 60 + insets.bottom,
+          paddingBottom: insets.bottom + 8,
           paddingTop: 8,
         },
         tabBarLabelStyle: {
@@ -20,7 +23,7 @@ export default function TabLayout() {
           fontWeight: "600",
         },
         headerStyle: {
-          backgroundColor: "#0F0F1A",
+          backgroundColor: "#050508",
         },
         headerTintColor: "#FFFFFF",
         headerTitleStyle: {
@@ -52,7 +55,7 @@ export default function TabLayout() {
         options={{
           title: "Profile",
           tabBarIcon: ({ color, size }) => (
-            <FontAwesome5 name="user" size={size - 2} color={color} />
+            <Ionicons name="person" size={size} color={color} />
           ),
         }}
       />

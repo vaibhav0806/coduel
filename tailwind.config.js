@@ -8,31 +8,32 @@ module.exports = {
   theme: {
     extend: {
       colors: {
-        // Brand colors
+        // Brand colors - Neon Green theme
         primary: {
-          DEFAULT: "#6366F1", // Indigo
-          dark: "#4F46E5",
-          light: "#818CF8",
+          DEFAULT: "#39FF14", // Neon Green
+          dark: "#32E012",
+          light: "#5FFF42",
         },
         secondary: {
-          DEFAULT: "#06B6D4", // Cyan
-          dark: "#0891B2",
-          light: "#22D3EE",
+          DEFAULT: "#8B5CF6", // Purple
+          dark: "#7C3AED",
+          light: "#A78BFA",
         },
         accent: {
-          DEFAULT: "#F59E0B", // Amber (for streaks, highlights)
-          dark: "#D97706",
-          light: "#FBBF24",
+          DEFAULT: "#FF6B35", // Orange (for streaks, highlights)
+          dark: "#E85A2A",
+          light: "#FF8F66",
         },
         // Battle colors
         win: "#10B981", // Green
         lose: "#EF4444", // Red
         draw: "#6B7280", // Gray
-        // Background
+        // Background - Near black
         dark: {
-          DEFAULT: "#0F0F1A",
-          card: "#1A1A2E",
-          border: "#2D2D44",
+          DEFAULT: "#050508",
+          card: "#0A0A0F",
+          border: "#1A1A24",
+          elevated: "#0F0F14",
         },
       },
       fontFamily: {

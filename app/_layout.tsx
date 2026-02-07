@@ -4,12 +4,13 @@ import { ThemeProvider, DarkTheme } from "@react-navigation/native";
 import { useFonts } from "expo-font";
 import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import "react-native-reanimated";
 import { StatusBar } from "expo-status-bar";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { AuthGuard } from "@/components/AuthGuard";
 import { useNotifications } from "@/hooks/useNotifications";
+import { LoadingScreen } from "@/components/LoadingScreen";
 
 export {
   // Catch any errors thrown by the Layout component.
@@ -23,17 +24,17 @@ export const unstable_settings = {
 // Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();
 
-// Custom dark theme matching our brand
+// Custom dark theme matching our brand - Neon Green
 const CoduelDarkTheme = {
   ...DarkTheme,
   colors: {
     ...DarkTheme.colors,
-    primary: "#6366F1", // Indigo
-    background: "#0F0F1A",
-    card: "#1A1A2E",
+    primary: "#39FF14", // Neon Green
+    background: "#050508",
+    card: "#0A0A0F",
     text: "#FFFFFF",
-    border: "#2D2D44",
-    notification: "#F59E0B",
+    border: "#1A1A24",
+    notification: "#FF6B35",
   },
 };
 
@@ -42,6 +43,7 @@ export default function RootLayout() {
     SpaceMono: require("../assets/fonts/SpaceMono-Regular.ttf"),
     ...FontAwesome.font,
   });
+  const [showLoading, setShowLoading] = useState(true);
 
   // Expo Router uses Error Boundaries to catch errors in the navigation tree.
   useEffect(() => {
@@ -52,12 +54,22 @@ export default function RootLayout() {
     if (loaded) {
       console.log("[RootLayout] Fonts loaded, hiding splash screen");
       SplashScreen.hideAsync();
+      // Show custom loading screen for 1.5 seconds
+      const timer = setTimeout(() => {
+        setShowLoading(false);
+      }, 1500);
+      return () => clearTimeout(timer);
     }
   }, [loaded]);
 
   if (!loaded) {
     console.log("[RootLayout] Waiting for fonts...");
     return null;
+  }
+
+  // Show loading screen with animations
+  if (showLoading) {
+    return <LoadingScreen />;
   }
 
   console.log("[RootLayout] Rendering RootLayoutNav");
@@ -85,14 +97,14 @@ function RootLayoutNav() {
         <Stack
           screenOptions={{
             headerStyle: {
-              backgroundColor: "#0F0F1A",
+              backgroundColor: "#050508",
             },
             headerTintColor: "#FFFFFF",
             headerTitleStyle: {
               fontWeight: "bold",
             },
             contentStyle: {
-              backgroundColor: "#0F0F1A",
+              backgroundColor: "#050508",
             },
           }}
         >

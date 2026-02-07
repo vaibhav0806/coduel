@@ -6,6 +6,7 @@ import Animated, {
   useSharedValue,
   useAnimatedStyle,
   withTiming,
+  cancelAnimation,
 } from "react-native-reanimated";
 import ViewShot from "react-native-view-shot";
 import { useEffect } from "react";
@@ -44,12 +45,24 @@ export default function BattleScreen() {
   // Animate timer when question phase starts
   useEffect(() => {
     if (battle.phase === "question") {
+      cancelAnimation(timerWidth);
       timerWidth.value = 100;
       timerWidth.value = withTiming(0, { duration: 20000 });
-    } else if (battle.phase === "countdown") {
-      timerWidth.value = 100;
+    } else {
+      // Stop animation on any other phase (result, explanation, etc.)
+      cancelAnimation(timerWidth);
+      if (battle.phase === "countdown") {
+        timerWidth.value = 100;
+      }
     }
   }, [battle.phase, battle.currentRound]);
+
+  // Cancel timer animation when answer is submitted
+  useEffect(() => {
+    if (battle.selectedAnswer !== null) {
+      cancelAnimation(timerWidth);
+    }
+  }, [battle.selectedAnswer]);
 
   // Auto-show explanation after result
   useEffect(() => {
@@ -67,7 +80,7 @@ export default function BattleScreen() {
   if (battle.phase === "loading") {
     return (
       <SafeAreaView className="flex-1 bg-dark items-center justify-center">
-        <ActivityIndicator size="large" color="#6366F1" />
+        <ActivityIndicator size="large" color="#39FF14" />
         <Text className="text-gray-400 text-lg mt-4">Loading battle...</Text>
       </SafeAreaView>
     );
@@ -165,7 +178,7 @@ export default function BattleScreen() {
             className="border border-primary rounded-xl p-4 mb-3"
           >
             <View className="flex-row items-center justify-center">
-              <Ionicons name="share-social" size={20} color="#6366F1" />
+              <Ionicons name="share-social" size={20} color="#39FF14" />
               <Text className="text-primary text-center font-bold text-lg ml-2">
                 {isSharing ? "Sharing..." : "Share Result"}
               </Text>
