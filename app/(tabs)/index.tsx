@@ -468,20 +468,6 @@ export default function HomeScreen() {
           </View>
         </Animated.View>
 
-        {/* Quick Tips */}
-        <Animated.View
-          entering={FadeInDown.delay(600).duration(400)}
-          className="mx-6 mt-6"
-        >
-          <View className="bg-dark-card/50 border border-dark-border/50 rounded-xl p-4">
-            <View className="flex-row items-center">
-              <Ionicons name="bulb-outline" size={16} color="#6B7280" />
-              <Text className="text-gray-500 text-xs ml-2">
-                Tip: Select a language topic to focus your practice
-              </Text>
-            </View>
-          </View>
-        </Animated.View>
       </ScrollView>
 
       {/* Matchmaking Overlay */}
@@ -501,9 +487,9 @@ export default function HomeScreen() {
               </View>
             </View>
 
-            <Text className="text-white text-xl font-bold mt-8">
+            <TextBold className="text-white text-xl mt-8">
               {matchmakingText}
-            </Text>
+            </TextBold>
             <Text className="text-gray-500 mt-2">
               Searching for a worthy opponent...
             </Text>
@@ -512,7 +498,7 @@ export default function HomeScreen() {
               onPress={handleCancelMatchmaking}
               className="mt-8 px-8 py-3 border border-dark-border rounded-xl active:bg-dark-card"
             >
-              <Text className="text-gray-400 font-medium">Cancel</Text>
+              <TextMedium className="text-gray-400">Cancel</TextMedium>
             </Pressable>
           </Animated.View>
         </View>

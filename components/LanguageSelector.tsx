@@ -1,10 +1,15 @@
-import React from "react";
-import { View, Text, Pressable, ScrollView } from "react-native";
+import React, { useState } from "react";
+import { View, Pressable, Modal } from "react-native";
+import { Text, TextBold, TextSemibold } from "@/components/ui/Text";
 import { Ionicons } from "@expo/vector-icons";
 import Animated, {
   useAnimatedStyle,
   useSharedValue,
   withSpring,
+  FadeIn,
+  FadeOut,
+  SlideInDown,
+  SlideOutDown,
 } from "react-native-reanimated";
 
 export interface Language {
@@ -12,13 +17,14 @@ export interface Language {
   name: string;
   icon: keyof typeof Ionicons.glyphMap;
   color: string;
+  description: string;
 }
 
 export const LANGUAGES: Language[] = [
-  { id: null, name: "All", icon: "apps", color: "#39FF14" },
-  { id: "python", name: "Python", icon: "logo-python", color: "#3776AB" },
-  { id: "javascript", name: "JavaScript", icon: "logo-javascript", color: "#F7DF1E" },
-  { id: "typescript", name: "TypeScript", icon: "code-slash", color: "#3178C6" },
+  { id: null, name: "All Languages", icon: "apps", color: "#39FF14", description: "Questions from all topics" },
+  { id: "python", name: "Python", icon: "logo-python", color: "#3776AB", description: "Python programming" },
+  { id: "javascript", name: "JavaScript", icon: "logo-javascript", color: "#F7DF1E", description: "JavaScript & ES6+" },
+  { id: "typescript", name: "TypeScript", icon: "code-slash", color: "#3178C6", description: "TypeScript fundamentals" },
 ];
 
 interface LanguageSelectorProps {
@@ -27,42 +33,17 @@ interface LanguageSelectorProps {
 }
 
 export function LanguageSelector({ selectedLanguage, onSelect }: LanguageSelectorProps) {
-  return (
-    <View className="mb-4">
-      <Text className="text-gray-400 text-sm mb-2 ml-1">Battle Topic</Text>
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={{ paddingRight: 16 }}
-      >
-        {LANGUAGES.map((lang) => (
-          <LanguageChip
-            key={lang.id ?? "all"}
-            language={lang}
-            isSelected={selectedLanguage === lang.id}
-            onPress={() => onSelect(lang.id)}
-          />
-        ))}
-      </ScrollView>
-    </View>
-  );
-}
-
-interface LanguageChipProps {
-  language: Language;
-  isSelected: boolean;
-  onPress: () => void;
-}
-
-function LanguageChip({ language, isSelected, onPress }: LanguageChipProps) {
+  const [modalVisible, setModalVisible] = useState(false);
   const scale = useSharedValue(1);
+
+  const selectedLang = LANGUAGES.find(l => l.id === selectedLanguage) ?? LANGUAGES[0];
 
   const animatedStyle = useAnimatedStyle(() => ({
     transform: [{ scale: scale.value }],
   }));
 
   const handlePressIn = () => {
-    scale.value = withSpring(0.95, { damping: 20, stiffness: 300 });
+    scale.value = withSpring(0.98, { damping: 20, stiffness: 300 });
   };
 
   const handlePressOut = () => {
@@ -70,99 +51,114 @@ function LanguageChip({ language, isSelected, onPress }: LanguageChipProps) {
   };
 
   return (
-    <Pressable onPress={onPress} onPressIn={handlePressIn} onPressOut={handlePressOut}>
-      <Animated.View
-        style={animatedStyle}
-        className={`flex-row items-center px-4 py-2 mr-2 rounded-full border ${
-          isSelected
-            ? "bg-primary/20 border-primary"
-            : "bg-dark-card border-dark-border"
-        }`}
+    <>
+      <Pressable
+        onPress={() => setModalVisible(true)}
+        onPressIn={handlePressIn}
+        onPressOut={handlePressOut}
       >
-        <Ionicons
-          name={language.icon}
-          size={16}
-          color={isSelected ? "#39FF14" : language.color}
-        />
-        <Text
-          className={`ml-2 font-medium ${
-            isSelected ? "text-primary" : "text-white"
-          }`}
+        <Animated.View
+          style={animatedStyle}
+          className="bg-dark-card border border-dark-border rounded-xl p-4 flex-row items-center justify-between"
         >
-          {language.name}
-        </Text>
-        {isSelected && (
-          <Ionicons name="checkmark" size={14} color="#39FF14" className="ml-1" />
-        )}
-      </Animated.View>
-    </Pressable>
-  );
-}
+          <View className="flex-row items-center flex-1">
+            <View className="w-10 h-10 bg-dark-border rounded-full items-center justify-center">
+              <Ionicons name={selectedLang.icon} size={20} color={selectedLang.color} />
+            </View>
+            <View className="ml-3 flex-1">
+              <TextSemibold className="text-white">{selectedLang.name}</TextSemibold>
+              <Text className="text-gray-500 text-xs mt-0.5">{selectedLang.description}</Text>
+            </View>
+          </View>
+          <View className="flex-row items-center">
+            <View className="bg-dark-border px-2 py-1 rounded-full mr-2">
+              <Text className="text-gray-400 text-xs">Topic</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color="#6B7280" />
+          </View>
+        </Animated.View>
+      </Pressable>
 
-interface LanguageModalProps {
-  visible: boolean;
-  onClose: () => void;
-  selectedLanguage: string | null;
-  onSelect: (language: string | null) => void;
-}
-
-export function LanguageModal({
-  visible,
-  onClose,
-  selectedLanguage,
-  onSelect,
-}: LanguageModalProps) {
-  if (!visible) return null;
-
-  return (
-    <View className="absolute inset-0 bg-black/70 items-center justify-center z-50">
-      <View className="bg-dark-card border border-dark-border rounded-2xl w-11/12 max-w-sm p-6">
-        <View className="flex-row items-center justify-between mb-4">
-          <Text className="text-white text-xl font-bold">Select Topic</Text>
-          <Pressable onPress={onClose} className="p-2">
-            <Ionicons name="close" size={24} color="#6B7280" />
-          </Pressable>
-        </View>
-
-        <View className="space-y-2">
-          {LANGUAGES.map((lang) => (
-            <Pressable
-              key={lang.id ?? "all"}
-              onPress={() => {
-                onSelect(lang.id);
-                onClose();
-              }}
-              className={`flex-row items-center p-4 rounded-xl border ${
-                selectedLanguage === lang.id
-                  ? "bg-primary/20 border-primary"
-                  : "bg-dark border-dark-border"
-              }`}
+      <Modal
+        visible={modalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setModalVisible(false)}
+      >
+        <Pressable
+          className="flex-1 bg-black/80 justify-end"
+          onPress={() => setModalVisible(false)}
+        >
+          <Pressable onPress={(e) => e.stopPropagation()}>
+            <Animated.View
+              entering={SlideInDown.springify().damping(20)}
+              className="bg-dark-card border-t border-dark-border rounded-t-3xl"
             >
-              <View
-                className={`w-10 h-10 rounded-full items-center justify-center ${
-                  selectedLanguage === lang.id ? "bg-primary/30" : "bg-dark-border"
-                }`}
-              >
-                <Ionicons
-                  name={lang.icon}
-                  size={20}
-                  color={selectedLanguage === lang.id ? "#39FF14" : lang.color}
-                />
+              {/* Handle bar */}
+              <View className="items-center pt-3 pb-2">
+                <View className="w-10 h-1 bg-dark-border rounded-full" />
               </View>
-              <Text
-                className={`ml-3 font-semibold flex-1 ${
-                  selectedLanguage === lang.id ? "text-primary" : "text-white"
-                }`}
-              >
-                {lang.name}
-              </Text>
-              {selectedLanguage === lang.id && (
-                <Ionicons name="checkmark-circle" size={24} color="#39FF14" />
-              )}
-            </Pressable>
-          ))}
-        </View>
-      </View>
-    </View>
+
+              {/* Header */}
+              <View className="px-6 pb-4 border-b border-dark-border">
+                <TextBold className="text-white text-xl">Select Topic</TextBold>
+                <Text className="text-gray-500 text-sm mt-1">
+                  Focus your practice on a specific language
+                </Text>
+              </View>
+
+              {/* Options */}
+              <View className="px-4 py-4">
+                {LANGUAGES.map((lang, index) => {
+                  const isSelected = selectedLanguage === lang.id;
+                  return (
+                    <Pressable
+                      key={lang.id ?? "all"}
+                      onPress={() => {
+                        onSelect(lang.id);
+                        setModalVisible(false);
+                      }}
+                      className={`flex-row items-center p-4 rounded-xl mb-2 ${
+                        isSelected
+                          ? "bg-primary/15 border border-primary/50"
+                          : "bg-dark-elevated border border-transparent active:bg-dark-border"
+                      }`}
+                    >
+                      <View
+                        className={`w-12 h-12 rounded-xl items-center justify-center ${
+                          isSelected ? "bg-primary/20" : "bg-dark-border"
+                        }`}
+                      >
+                        <Ionicons
+                          name={lang.icon}
+                          size={24}
+                          color={isSelected ? "#39FF14" : lang.color}
+                        />
+                      </View>
+                      <View className="ml-4 flex-1">
+                        <TextSemibold className={isSelected ? "text-primary" : "text-white"}>
+                          {lang.name}
+                        </TextSemibold>
+                        <Text className="text-gray-500 text-xs mt-0.5">
+                          {lang.description}
+                        </Text>
+                      </View>
+                      {isSelected && (
+                        <View className="w-6 h-6 bg-primary rounded-full items-center justify-center">
+                          <Ionicons name="checkmark" size={16} color="#050508" />
+                        </View>
+                      )}
+                    </Pressable>
+                  );
+                })}
+              </View>
+
+              {/* Safe area padding */}
+              <View className="h-8" />
+            </Animated.View>
+          </Pressable>
+        </Pressable>
+      </Modal>
+    </>
   );
 }
