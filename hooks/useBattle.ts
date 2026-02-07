@@ -207,7 +207,7 @@ export function useBattle({
 
   // Apply round result to state (shared by bot and human paths)
   const applyRoundResult = useCallback(
-    (result: RoundResult) => {
+    async (result: RoundResult) => {
       playerScoreRef.current = result.player_score;
       opponentScoreRef.current = result.opponent_score;
 
