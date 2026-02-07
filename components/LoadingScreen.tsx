@@ -1,5 +1,5 @@
 import React, { useEffect } from "react";
-import { View, Text } from "react-native";
+import { View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import Animated, {
   useSharedValue,
@@ -9,6 +9,7 @@ import Animated, {
   withSequence,
   Easing,
 } from "react-native-reanimated";
+import { Text, TextBold } from "@/components/ui/Text";
 
 interface LoadingScreenProps {
   onAnimationComplete?: () => void;
@@ -58,9 +59,9 @@ export function LoadingScreen({ onAnimationComplete }: LoadingScreenProps) {
       </Animated.View>
 
       {/* App Name */}
-      <Text className="text-white text-3xl font-bold tracking-wider">
+      <TextBold className="text-white text-3xl tracking-wider">
         CODUEL
-      </Text>
+      </TextBold>
       <Text className="text-gray-500 text-sm mt-2">
         Code. Battle. Win.
       </Text>

@@ -1,4 +1,5 @@
-import { View, Text, Pressable, ActivityIndicator } from "react-native";
+import { View, Text as RNText, Pressable, ActivityIndicator } from "react-native";
+import { Text, TextBold, TextSemibold, TextMedium } from "@/components/ui/Text";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
@@ -118,13 +119,13 @@ export default function BattleScreen() {
   if (battle.phase === "countdown") {
     return (
       <SafeAreaView className="flex-1 bg-dark items-center justify-center">
-        <Text className="text-gray-400 text-lg mb-4">
+        <TextMedium className="text-gray-400 text-lg mb-4">
           Round {battle.currentRound}
-        </Text>
-        <Text className="text-8xl font-bold text-primary">
+        </TextMedium>
+        <TextBold className="text-8xl text-primary">
           {battle.countdown}
-        </Text>
-        <Text className="text-gray-400 text-lg mt-4">Get Ready!</Text>
+        </TextBold>
+        <TextMedium className="text-gray-400 text-lg mt-4">Get Ready!</TextMedium>
       </SafeAreaView>
     );
   }
@@ -211,26 +212,26 @@ export default function BattleScreen() {
               <View className="flex-row items-center justify-center">
                 <View className="items-center mr-8">
                   <Text className="text-gray-500 text-xs uppercase mb-1">You</Text>
-                  <Text className={`text-5xl font-bold ${isWinner ? "text-win" : "text-white"}`}>
+                  <TextBold className={`text-5xl ${isWinner ? "text-win" : "text-white"}`}>
                     {playerScore}
-                  </Text>
+                  </TextBold>
                 </View>
                 <View className="w-px h-16 bg-dark-border" />
                 <View className="items-center ml-8">
                   <Text className="text-gray-500 text-xs uppercase mb-1">
                     {battle.opponent?.username ?? "Opponent"}
                   </Text>
-                  <Text className={`text-5xl font-bold ${!isWinner ? "text-lose" : "text-white"}`}>
+                  <TextBold className={`text-5xl ${!isWinner ? "text-lose" : "text-white"}`}>
                     {opponentScore}
-                  </Text>
+                  </TextBold>
                 </View>
               </View>
 
               {isComeback && (
                 <View className="bg-accent/20 px-3 py-1 rounded-full mt-4">
-                  <Text className="text-accent text-xs font-bold uppercase tracking-wide">
+                  <TextBold className="text-accent text-xs uppercase tracking-wide">
                     Comeback Victory!
-                  </Text>
+                  </TextBold>
                 </View>
               )}
             </View>
@@ -242,14 +243,14 @@ export default function BattleScreen() {
                 <View className="flex-row items-center justify-between mb-4">
                   <Text className="text-gray-500">Rating</Text>
                   <View className="flex-row items-center">
-                    <Text
-                      className={`font-bold mr-2 ${
+                    <TextBold
+                      className={`mr-2 ${
                         ratingChange > 0 ? "text-win" : "text-lose"
                       }`}
                     >
                       {ratingChange > 0 ? "+" : ""}{ratingChange}
-                    </Text>
-                    <Text className="text-white font-bold text-lg">{newRating}</Text>
+                    </TextBold>
+                    <TextBold className="text-white text-lg">{newRating}</TextBold>
                   </View>
                 </View>
               )}
@@ -259,7 +260,7 @@ export default function BattleScreen() {
                 <Text className="text-gray-500">XP Earned</Text>
                 <View className="flex-row items-center">
                   <Ionicons name="star" size={16} color="#39FF14" />
-                  <Text className="text-primary font-bold text-lg ml-1">+{xpEarned}</Text>
+                  <TextBold className="text-primary text-lg ml-1">+{xpEarned}</TextBold>
                 </View>
               </View>
 
@@ -269,10 +270,10 @@ export default function BattleScreen() {
                 <View className="flex-row items-center">
                   {leveledUp && (
                     <View className="bg-primary/20 px-2 py-0.5 rounded-full mr-2">
-                      <Text className="text-primary text-xs font-bold">LEVEL UP!</Text>
+                      <TextBold className="text-primary text-xs">LEVEL UP!</TextBold>
                     </View>
                   )}
-                  <Text className="text-white font-bold text-lg">{newLevel}</Text>
+                  <TextBold className="text-white text-lg">{newLevel}</TextBold>
                 </View>
               </View>
             </View>
@@ -295,7 +296,7 @@ export default function BattleScreen() {
               className="p-4 flex-row items-center justify-center"
             >
               <Ionicons name="flash" size={22} color="#FFFFFF" />
-              <Text className="text-white text-lg font-bold ml-2">Play Again</Text>
+              <TextBold className="text-white text-lg ml-2">Play Again</TextBold>
             </LinearGradient>
           </Pressable>
         </Animated.View>
@@ -313,9 +314,9 @@ export default function BattleScreen() {
       {/* Header - Scores */}
       <View className="flex-row justify-between items-center px-6 py-4">
         <View className="items-center">
-          <Text className="text-white font-bold">
+          <TextBold className="text-white">
             {battle.player?.username ?? "You"}
-          </Text>
+          </TextBold>
           <View className="flex-row mt-1">
             {[...Array(battle.totalRounds)].map((_, i) => (
               <View

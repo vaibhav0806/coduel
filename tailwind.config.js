@@ -37,8 +37,11 @@ module.exports = {
         },
       },
       fontFamily: {
-        sans: ["Inter", "system-ui", "sans-serif"],
-        mono: ["JetBrains Mono", "monospace"],
+        sans: ["Outfit_400Regular"],
+        "sans-medium": ["Outfit_500Medium"],
+        "sans-semibold": ["Outfit_600SemiBold"],
+        "sans-bold": ["Outfit_700Bold"],
+        mono: ["SpaceMono"],
       },
     },
   },

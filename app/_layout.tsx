@@ -2,6 +2,12 @@ import "../global.css";
 import FontAwesome from "@expo/vector-icons/FontAwesome";
 import { ThemeProvider, DarkTheme } from "@react-navigation/native";
 import { useFonts } from "expo-font";
+import {
+  Outfit_400Regular,
+  Outfit_500Medium,
+  Outfit_600SemiBold,
+  Outfit_700Bold,
+} from "@expo-google-fonts/outfit";
 import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { useEffect, useState } from "react";
@@ -41,6 +47,10 @@ const CoduelDarkTheme = {
 export default function RootLayout() {
   const [loaded, error] = useFonts({
     SpaceMono: require("../assets/fonts/SpaceMono-Regular.ttf"),
+    Outfit_400Regular,
+    Outfit_500Medium,
+    Outfit_600SemiBold,
+    Outfit_700Bold,
     ...FontAwesome.font,
   });
   const [showLoading, setShowLoading] = useState(true);

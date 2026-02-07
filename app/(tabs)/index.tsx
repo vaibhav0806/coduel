@@ -1,4 +1,5 @@
-import { View, Text, Pressable, ScrollView, Modal, ActivityIndicator } from "react-native";
+import { View, Text as RNText, Pressable, ScrollView, Modal, ActivityIndicator } from "react-native";
+import { Text, TextBold, TextSemibold, TextMedium } from "@/components/ui/Text";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router, useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
@@ -293,12 +294,12 @@ export default function HomeScreen() {
         >
           <View className="flex-row items-center justify-between">
             <View>
-              <Text className="text-gray-500 text-xs uppercase tracking-widest font-medium">
+              <TextMedium className="text-gray-500 text-xs uppercase tracking-widest">
                 Welcome back
-              </Text>
-              <Text className="text-white text-2xl font-bold mt-1">
+              </TextMedium>
+              <TextBold className="text-white text-2xl mt-1">
                 {profile?.username ?? "Coder"}
-              </Text>
+              </TextBold>
             </View>
             <View className="flex-row items-center">
               <LinearGradient
@@ -307,8 +308,8 @@ export default function HomeScreen() {
                 end={{ x: 1, y: 1 }}
                 className="px-3 py-1.5 rounded-full flex-row items-center"
               >
-                <Text className="mr-1">{tierEmoji[tier] ?? "🥉"}</Text>
-                <Text className="text-white font-bold text-sm">{rating}</Text>
+                <RNText className="mr-1">{tierEmoji[tier] ?? "🥉"}</RNText>
+                <TextBold className="text-white text-sm">{rating}</TextBold>
               </LinearGradient>
             </View>
           </View>
@@ -325,21 +326,21 @@ export default function HomeScreen() {
                 <Text className="text-gray-500 text-xs uppercase tracking-wide">Wins</Text>
                 <Ionicons name="trophy-outline" size={14} color="#10B981" />
               </View>
-              <Text className="text-win text-xl font-bold mt-1">{wins}</Text>
+              <TextBold className="text-win text-xl mt-1">{wins}</TextBold>
             </View>
             <View className="flex-1 bg-dark-card border border-dark-border rounded-xl p-3 mr-2">
               <View className="flex-row items-center justify-between">
                 <Text className="text-gray-500 text-xs uppercase tracking-wide">Losses</Text>
                 <Ionicons name="close-circle-outline" size={14} color="#EF4444" />
               </View>
-              <Text className="text-lose text-xl font-bold mt-1">{losses}</Text>
+              <TextBold className="text-lose text-xl mt-1">{losses}</TextBold>
             </View>
             <View className="flex-1 bg-dark-card border border-dark-border rounded-xl p-3">
               <View className="flex-row items-center justify-between">
                 <Text className="text-gray-500 text-xs uppercase tracking-wide">Streak</Text>
-                <Text className="text-sm">🔥</Text>
+                <RNText className="text-sm">🔥</RNText>
               </View>
-              <Text className="text-accent text-xl font-bold mt-1">{streak}</Text>
+              <TextBold className="text-accent text-xl mt-1">{streak}</TextBold>
             </View>
           </View>
         </Animated.View>
@@ -379,9 +380,9 @@ export default function HomeScreen() {
                     <Ionicons name="flash" size={24} color="#FFFFFF" />
                   </View>
                   <View>
-                    <Text className="text-white text-2xl font-bold tracking-wide">
+                    <TextBold className="text-white text-2xl tracking-wide">
                       BATTLE
-                    </Text>
+                    </TextBold>
                     <Text className="text-white/60 text-sm">
                       Find a worthy opponent
                     </Text>
@@ -402,9 +403,9 @@ export default function HomeScreen() {
             className="bg-dark-card border border-dark-border rounded-xl p-4 flex-row items-center justify-center active:bg-dark-elevated"
           >
             <Ionicons name="barbell-outline" size={18} color="#6B7280" />
-            <Text className="text-gray-400 font-semibold ml-2">
+            <TextSemibold className="text-gray-400 ml-2">
               Practice Mode
-            </Text>
+            </TextSemibold>
             <Text className="text-gray-600 text-xs ml-2">• No rating change</Text>
           </Pressable>
         </Animated.View>
@@ -419,12 +420,12 @@ export default function HomeScreen() {
             <View className="flex-row items-center justify-between px-4 py-3 border-b border-dark-border">
               <View className="flex-row items-center">
                 <Ionicons name="podium-outline" size={18} color="#FF6B35" />
-                <Text className="text-white font-bold ml-2">Weekly League</Text>
+                <TextBold className="text-white ml-2">Weekly League</TextBold>
               </View>
               <View className="bg-accent/20 px-2 py-0.5 rounded-full">
-                <Text className="text-accent text-xs font-medium">
+                <TextMedium className="text-accent text-xs">
                   {tier.charAt(0).toUpperCase() + tier.slice(1)}
-                </Text>
+                </TextMedium>
               </View>
             </View>
 
@@ -433,18 +434,18 @@ export default function HomeScreen() {
               {leagueData ? (
                 <View className="flex-row justify-around">
                   <View className="items-center">
-                    <Text className="text-3xl font-bold text-white">
+                    <TextBold className="text-3xl text-white">
                       #{leagueData.position}
-                    </Text>
+                    </TextBold>
                     <Text className="text-gray-500 text-xs uppercase tracking-wide mt-1">
                       Position
                     </Text>
                   </View>
                   <View className="w-px bg-dark-border" />
                   <View className="items-center">
-                    <Text className="text-3xl font-bold text-primary">
+                    <TextBold className="text-3xl text-primary">
                       {leagueData.points}
-                    </Text>
+                    </TextBold>
                     <Text className="text-gray-500 text-xs uppercase tracking-wide mt-1">
                       Points
                     </Text>
