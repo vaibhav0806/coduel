@@ -6,14 +6,23 @@ import Animated, {
   useSharedValue,
   useAnimatedStyle,
   withTiming,
+  withSpring,
+  withSequence,
+  withDelay,
   cancelAnimation,
+  FadeIn,
+  FadeInDown,
+  FadeInUp,
+  ZoomIn,
 } from "react-native-reanimated";
 import ViewShot from "react-native-view-shot";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useBattle } from "@/hooks/useBattle";
 import { useAuth } from "@/contexts/AuthContext";
 import { useShareCard } from "@/hooks/useShareCard";
 import { ShareCard } from "@/components/ShareCard";
+import { LinearGradient } from "expo-linear-gradient";
+import { createBotMatch } from "@/lib/supabase";
 
 export default function BattleScreen() {
   const { id, opponentUsername, opponentRating, isBotMatch } =
@@ -76,6 +85,25 @@ export default function BattleScreen() {
     router.back();
   };
 
+  const handleBattle = async () => {
+    if (!userId) return;
+    try {
+      // Create a new bot match (practice mode by default from post-match)
+      const result = await createBotMatch(userId, false, null);
+      router.replace({
+        pathname: "/battle/[id]",
+        params: {
+          id: result.match_id,
+          opponentUsername: result.opponent_username,
+          opponentRating: result.opponent_rating.toString(),
+          isBotMatch: "true",
+        },
+      });
+    } catch (error) {
+      console.error("Failed to create new battle:", error);
+    }
+  };
+
   // Loading Phase
   if (battle.phase === "loading") {
     return (
@@ -110,11 +138,14 @@ export default function BattleScreen() {
       : playerScore > opponentScore;
 
     const ratingChange = battle.matchResult?.rating_change ?? 0;
-
+    const newRating = battle.matchResult?.new_rating ?? (profile?.rating ?? 0);
+    const xpEarned = battle.matchResult?.xp_earned ?? 0;
+    const newLevel = battle.matchResult?.new_level ?? (profile?.level ?? 1);
+    const leveledUp = battle.matchResult?.leveled_up ?? false;
     const isComeback = battle.matchResult?.is_comeback ?? false;
 
     return (
-      <SafeAreaView className="flex-1 bg-dark items-center justify-center px-6">
+      <SafeAreaView className="flex-1 bg-dark">
         {/* Hidden ShareCard for capture */}
         <ViewShot
           ref={viewShotRef}
@@ -126,7 +157,7 @@ export default function BattleScreen() {
             playerUsername={profile?.username ?? battle.player?.username ?? "Player"}
             playerScore={playerScore}
             opponentScore={opponentScore}
-            rating={profile?.rating ?? battle.player?.rating ?? 0}
+            rating={newRating}
             ratingChange={ratingChange}
             tier={profile?.tier ?? "bronze"}
             currentStreak={profile?.current_streak ?? 0}
@@ -134,65 +165,140 @@ export default function BattleScreen() {
           />
         </ViewShot>
 
-        <Text className="text-6xl mb-4">{isWinner ? "🏆" : "😢"}</Text>
-        <Text
-          className={`text-4xl font-bold mb-2 ${
-            isWinner ? "text-win" : "text-lose"
-          }`}
+        {/* Header with Home and Share icons */}
+        <Animated.View
+          entering={FadeIn.delay(200).duration(300)}
+          className="flex-row justify-between items-center px-6 pt-4"
         >
-          {isWinner ? "VICTORY!" : "DEFEAT"}
-        </Text>
-        <Text className="text-white text-2xl mb-2">
-          {playerScore} - {opponentScore}
-        </Text>
-
-        {isComeback && (
-          <View className="bg-accent/20 px-4 py-1 rounded-full mb-3">
-            <Text className="text-accent font-bold">Clutch!</Text>
-          </View>
-        )}
-
-        {ratingChange !== 0 && (
-          <Text
-            className={`text-xl font-bold mb-8 ${
-              ratingChange > 0 ? "text-win" : "text-lose"
-            }`}
-          >
-            {ratingChange > 0 ? "+" : ""}
-            {ratingChange} Rating
-          </Text>
-        )}
-
-        <View className="w-full">
           <Pressable
             onPress={handleExit}
-            className="bg-primary rounded-xl p-4 mb-3"
+            className="w-11 h-11 bg-dark-card border border-dark-border rounded-full items-center justify-center"
           >
-            <Text className="text-white text-center font-bold text-lg">
-              Play Again
-            </Text>
+            <Ionicons name="home-outline" size={20} color="#9CA3AF" />
           </Pressable>
           <Pressable
             onPress={share}
             disabled={isSharing}
-            className="border border-primary rounded-xl p-4 mb-3"
+            className="w-11 h-11 bg-dark-card border border-dark-border rounded-full items-center justify-center"
           >
-            <View className="flex-row items-center justify-center">
-              <Ionicons name="share-social" size={20} color="#39FF14" />
-              <Text className="text-primary text-center font-bold text-lg ml-2">
-                {isSharing ? "Sharing..." : "Share Result"}
-              </Text>
+            <Ionicons
+              name={isSharing ? "hourglass-outline" : "share-outline"}
+              size={20}
+              color="#9CA3AF"
+            />
+          </Pressable>
+        </Animated.View>
+
+        {/* Main Content */}
+        <View className="flex-1 items-center justify-center px-6">
+          {/* Victory/Defeat Text */}
+          <Animated.Text
+            entering={ZoomIn.delay(100).duration(400)}
+            className={`text-5xl font-bold tracking-wider mb-6 ${
+              isWinner ? "text-win" : "text-lose"
+            }`}
+          >
+            {isWinner ? "VICTORY" : "DEFEAT"}
+          </Animated.Text>
+
+          {/* Main Result Card */}
+          <Animated.View
+            entering={FadeInUp.delay(300).duration(400)}
+            className="w-full bg-dark-card border border-dark-border rounded-3xl overflow-hidden"
+          >
+            {/* Score Section */}
+            <View className="p-6 items-center border-b border-dark-border">
+              <View className="flex-row items-center justify-center">
+                <View className="items-center mr-8">
+                  <Text className="text-gray-500 text-xs uppercase mb-1">You</Text>
+                  <Text className={`text-5xl font-bold ${isWinner ? "text-win" : "text-white"}`}>
+                    {playerScore}
+                  </Text>
+                </View>
+                <View className="w-px h-16 bg-dark-border" />
+                <View className="items-center ml-8">
+                  <Text className="text-gray-500 text-xs uppercase mb-1">
+                    {battle.opponent?.username ?? "Opponent"}
+                  </Text>
+                  <Text className={`text-5xl font-bold ${!isWinner ? "text-lose" : "text-white"}`}>
+                    {opponentScore}
+                  </Text>
+                </View>
+              </View>
+
+              {isComeback && (
+                <View className="bg-accent/20 px-3 py-1 rounded-full mt-4">
+                  <Text className="text-accent text-xs font-bold uppercase tracking-wide">
+                    Comeback Victory!
+                  </Text>
+                </View>
+              )}
             </View>
-          </Pressable>
-          <Pressable
-            onPress={handleExit}
-            className="bg-dark-card border border-dark-border rounded-xl p-4"
-          >
-            <Text className="text-gray-400 text-center font-semibold">
-              Back to Home
-            </Text>
-          </Pressable>
+
+            {/* Stats Section */}
+            <View className="p-6">
+              {/* Rating Change (only for ranked) */}
+              {ratingChange !== 0 && (
+                <View className="flex-row items-center justify-between mb-4">
+                  <Text className="text-gray-500">Rating</Text>
+                  <View className="flex-row items-center">
+                    <Text
+                      className={`font-bold mr-2 ${
+                        ratingChange > 0 ? "text-win" : "text-lose"
+                      }`}
+                    >
+                      {ratingChange > 0 ? "+" : ""}{ratingChange}
+                    </Text>
+                    <Text className="text-white font-bold text-lg">{newRating}</Text>
+                  </View>
+                </View>
+              )}
+
+              {/* XP Earned */}
+              <View className="flex-row items-center justify-between mb-4">
+                <Text className="text-gray-500">XP Earned</Text>
+                <View className="flex-row items-center">
+                  <Ionicons name="star" size={16} color="#39FF14" />
+                  <Text className="text-primary font-bold text-lg ml-1">+{xpEarned}</Text>
+                </View>
+              </View>
+
+              {/* Level */}
+              <View className="flex-row items-center justify-between">
+                <Text className="text-gray-500">Level</Text>
+                <View className="flex-row items-center">
+                  {leveledUp && (
+                    <View className="bg-primary/20 px-2 py-0.5 rounded-full mr-2">
+                      <Text className="text-primary text-xs font-bold">LEVEL UP!</Text>
+                    </View>
+                  )}
+                  <Text className="text-white font-bold text-lg">{newLevel}</Text>
+                </View>
+              </View>
+            </View>
+          </Animated.View>
         </View>
+
+        {/* Bottom Action Button */}
+        <Animated.View
+          entering={FadeInDown.delay(500).duration(400)}
+          className="px-6 pb-6"
+        >
+          <Pressable
+            onPress={handleBattle}
+            className="overflow-hidden rounded-2xl"
+          >
+            <LinearGradient
+              colors={["#39FF14", "#2DD10D"]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              className="p-4 flex-row items-center justify-center"
+            >
+              <Ionicons name="flash" size={22} color="#FFFFFF" />
+              <Text className="text-white text-lg font-bold ml-2">Play Again</Text>
+            </LinearGradient>
+          </Pressable>
+        </Animated.View>
       </SafeAreaView>
     );
   }

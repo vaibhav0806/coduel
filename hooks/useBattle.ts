@@ -15,6 +15,7 @@ import {
 import { RealtimeChannel } from "@supabase/supabase-js";
 import { calculateStreakUpdate } from "@/lib/streak";
 import { getWeekStart, LEAGUE_POINTS } from "@/lib/league";
+import { calculateMatchXP, getLevelFromXP } from "@/lib/xp";
 
 export type BattlePhase =
   | "loading"
@@ -60,6 +61,10 @@ interface MatchResult {
   opponent_score: number;
   rating_change: number;
   is_comeback: boolean;
+  xp_earned: number;
+  new_rating: number;
+  new_level: number;
+  leveled_up: boolean;
 }
 
 interface UseBattleProps {
@@ -251,24 +256,34 @@ export function useBattle({
           ratingChange = loserDelta;
         }
 
+        // Calculate XP earned (always awarded, even in practice)
+        const isWin = matchWinner === "player";
+        const xpResult = calculateMatchXP(isWin);
+        const newRating = isRankedRef.current
+          ? applyFloorProtection(playerRating, playerRating + ratingChange)
+          : playerRating;
+
+        // Update profile and get XP result
+        const xpUpdate = await updateProfileAfterMatch(
+          userId,
+          playerRating,
+          ratingChange,
+          isWin,
+          isRankedRef.current,
+          xpResult.totalXP
+        );
+
         setMatchResult({
           winner: matchWinner,
           player_score: pScore,
           opponent_score: oScore,
           rating_change: isRankedRef.current ? ratingChange : 0,
           is_comeback: isComeback,
+          xp_earned: xpResult.totalXP,
+          new_rating: newRating,
+          new_level: xpUpdate.newLevel,
+          leveled_up: xpUpdate.leveledUp,
         });
-
-        // Only update profile for ranked matches (practice mode doesn't affect rating/wins/losses)
-        if (isRankedRef.current) {
-          updateProfileAfterMatch(
-            userId,
-            playerRating,
-            ratingChange,
-            matchWinner === "player",
-            true
-          );
-        }
 
         // Only player1 updates the match record (to avoid double-writes)
         if (isPlayer1Ref.current) {
@@ -650,8 +665,9 @@ async function updateProfileAfterMatch(
   currentRating: number,
   ratingChange: number,
   isWin: boolean,
-  isRanked: boolean
-) {
+  isRanked: boolean,
+  xpEarned: number
+): Promise<{ newLevel: number; leveledUp: boolean }> {
   const newRating = applyFloorProtection(
     currentRating,
     currentRating + ratingChange
@@ -660,7 +676,7 @@ async function updateProfileAfterMatch(
 
   const { data: current } = await supabase
     .from("profiles")
-    .select("wins, losses, current_streak, best_streak, last_battle_date, streak_freezes")
+    .select("wins, losses, current_streak, best_streak, last_battle_date, streak_freezes, xp, level")
     .eq("id", userId)
     .single();
 
@@ -671,15 +687,31 @@ async function updateProfileAfterMatch(
     streak_freezes: current?.streak_freezes ?? 0,
   });
 
+  // Calculate new XP and level
+  const currentXP = current?.xp ?? 0;
+  const currentLevel = current?.level ?? 1;
+  const newTotalXP = currentXP + xpEarned;
+  const levelInfo = getLevelFromXP(newTotalXP);
+  const leveledUp = levelInfo.level > currentLevel;
+
+  // Build update object - always update XP, conditionally update rating
+  const updateData: Record<string, any> = {
+    xp: newTotalXP,
+    level: levelInfo.level,
+    ...streakUpdate,
+  };
+
+  // Only update rating/wins/losses for ranked matches
+  if (isRanked) {
+    updateData.rating = newRating;
+    updateData.tier = newTier;
+    updateData.wins = (current?.wins ?? 0) + (isWin ? 1 : 0);
+    updateData.losses = (current?.losses ?? 0) + (isWin ? 0 : 1);
+  }
+
   await supabase
     .from("profiles")
-    .update({
-      rating: newRating,
-      tier: newTier,
-      wins: (current?.wins ?? 0) + (isWin ? 1 : 0),
-      losses: (current?.losses ?? 0) + (isWin ? 0 : 1),
-      ...streakUpdate,
-    })
+    .update(updateData)
     .eq("id", userId);
 
   // Award league points for ranked matches
@@ -709,4 +741,6 @@ async function updateProfileAfterMatch(
       });
     }
   }
+
+  return { newLevel: levelInfo.level, leveledUp };
 }
