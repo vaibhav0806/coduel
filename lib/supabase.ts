@@ -38,6 +38,15 @@ export const createMatchmakingChannel = (userId: string) => {
 
 // --- Matchmaking (direct DB queries, no Edge Functions) ---
 
+function shuffleAndPick<T>(arr: T[], count: number): T[] {
+  const shuffled = [...arr];
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+  }
+  return shuffled.slice(0, count);
+}
+
 async function selectQuestions(userId: string, difficulty: number) {
   // Get IDs of questions this user has already seen
   const { data: seen } = await supabase
@@ -47,12 +56,17 @@ async function selectQuestions(userId: string, difficulty: number) {
 
   const seenIds = (seen ?? []).map((s) => s.question_id);
 
-  // Try to get 3 unseen questions at the right difficulty
+  // Query target difficulty ± 1 to widen the pool (e.g. bronze gets diff 1+2)
+  const minDiff = Math.max(1, difficulty - 1);
+  const maxDiff = Math.min(4, difficulty + 1);
+
+  // Fetch unseen questions in the difficulty range
   let query = supabase
     .from("questions")
     .select("id")
-    .eq("difficulty", difficulty)
-    .limit(3);
+    .gte("difficulty", minDiff)
+    .lte("difficulty", maxDiff)
+    .limit(20);
 
   if (seenIds.length > 0) {
     query = query.not("id", "in", `(${seenIds.join(",")})`);
@@ -60,14 +74,15 @@ async function selectQuestions(userId: string, difficulty: number) {
 
   let { data: questions } = await query;
 
-  // Fallback: if not enough, get any questions at this difficulty
+  // Fallback: allow seen questions in the same difficulty range
   if (!questions || questions.length < 3) {
     const have = (questions ?? []).map((q) => q.id);
-    const needed = 3 - have.length;
+    const needed = 20 - have.length;
     let fallbackQuery = supabase
       .from("questions")
       .select("id")
-      .eq("difficulty", difficulty)
+      .gte("difficulty", minDiff)
+      .lte("difficulty", maxDiff)
       .limit(needed);
     if (have.length > 0) {
       fallbackQuery = fallbackQuery.not("id", "in", `(${have.join(",")})`);
@@ -76,16 +91,16 @@ async function selectQuestions(userId: string, difficulty: number) {
     questions = [...(questions ?? []), ...(fallback ?? [])];
   }
 
-  // Last resort: any 3 questions
+  // Last resort: any questions regardless of difficulty
   if (!questions || questions.length === 0) {
-    const { data: any3 } = await supabase
+    const { data: any20 } = await supabase
       .from("questions")
       .select("id")
-      .limit(3);
-    questions = any3 ?? [];
+      .limit(20);
+    questions = any20 ?? [];
   }
 
-  return questions;
+  return shuffleAndPick(questions, 3);
 }
 
 export async function createBotMatch(userId: string, isRanked: boolean) {

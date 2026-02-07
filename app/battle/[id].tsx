@@ -7,9 +7,12 @@ import Animated, {
   useAnimatedStyle,
   withTiming,
 } from "react-native-reanimated";
+import ViewShot from "react-native-view-shot";
 import { useEffect } from "react";
 import { useBattle } from "@/hooks/useBattle";
 import { useAuth } from "@/contexts/AuthContext";
+import { useShareCard } from "@/hooks/useShareCard";
+import { ShareCard } from "@/components/ShareCard";
 
 export default function BattleScreen() {
   const { id, opponentUsername, opponentRating, isBotMatch } =
@@ -20,8 +23,9 @@ export default function BattleScreen() {
       isBotMatch?: string;
     }>();
 
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const userId = user?.id ?? "";
+  const { viewShotRef, isSharing, share } = useShareCard();
 
   const battle = useBattle({
     matchId: id,
@@ -98,6 +102,25 @@ export default function BattleScreen() {
 
     return (
       <SafeAreaView className="flex-1 bg-dark items-center justify-center px-6">
+        {/* Hidden ShareCard for capture */}
+        <ViewShot
+          ref={viewShotRef}
+          options={{ format: "png", quality: 1 }}
+          style={{ position: "absolute", left: -9999 }}
+        >
+          <ShareCard
+            isWinner={isWinner}
+            playerUsername={profile?.username ?? battle.player?.username ?? "Player"}
+            playerScore={playerScore}
+            opponentScore={opponentScore}
+            rating={profile?.rating ?? battle.player?.rating ?? 0}
+            ratingChange={ratingChange}
+            tier={profile?.tier ?? "bronze"}
+            currentStreak={profile?.current_streak ?? 0}
+            isComeback={isComeback}
+          />
+        </ViewShot>
+
         <Text className="text-6xl mb-4">{isWinner ? "🏆" : "😢"}</Text>
         <Text
           className={`text-4xl font-bold mb-2 ${
@@ -135,6 +158,18 @@ export default function BattleScreen() {
             <Text className="text-white text-center font-bold text-lg">
               Play Again
             </Text>
+          </Pressable>
+          <Pressable
+            onPress={share}
+            disabled={isSharing}
+            className="border border-primary rounded-xl p-4 mb-3"
+          >
+            <View className="flex-row items-center justify-center">
+              <Ionicons name="share-social" size={20} color="#6366F1" />
+              <Text className="text-primary text-center font-bold text-lg ml-2">
+                {isSharing ? "Sharing..." : "Share Result"}
+              </Text>
+            </View>
           </Pressable>
           <Pressable
             onPress={handleExit}

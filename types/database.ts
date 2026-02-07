@@ -21,6 +21,7 @@ export interface Database {
           best_streak: number;
           last_battle_date: string | null;
           streak_freezes: number;
+          push_token: string | null;
           created_at: string;
         };
         Insert: {
@@ -34,6 +35,7 @@ export interface Database {
           best_streak?: number;
           last_battle_date?: string | null;
           streak_freezes?: number;
+          push_token?: string | null;
           created_at?: string;
         };
         Update: {
@@ -47,6 +49,7 @@ export interface Database {
           best_streak?: number;
           last_battle_date?: string | null;
           streak_freezes?: number;
+          push_token?: string | null;
           created_at?: string;
         };
         Relationships: [];

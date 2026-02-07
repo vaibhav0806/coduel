@@ -7,8 +7,9 @@ import * as SplashScreen from "expo-splash-screen";
 import { useEffect } from "react";
 import "react-native-reanimated";
 import { StatusBar } from "expo-status-bar";
-import { AuthProvider } from "@/contexts/AuthContext";
+import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { AuthGuard } from "@/components/AuthGuard";
+import { useNotifications } from "@/hooks/useNotifications";
 
 export {
   // Catch any errors thrown by the Layout component.
@@ -64,11 +65,22 @@ export default function RootLayout() {
   return <RootLayoutNav />;
 }
 
+function NotificationManager() {
+  const { user, profile } = useAuth();
+  useNotifications({
+    userId: user?.id ?? null,
+    lastBattleDate: profile?.last_battle_date ?? null,
+    currentStreak: profile?.current_streak ?? 0,
+  });
+  return null;
+}
+
 function RootLayoutNav() {
   return (
     <ThemeProvider value={CoduelDarkTheme}>
       <StatusBar style="light" />
       <AuthProvider>
+        <NotificationManager />
         <AuthGuard>
         <Stack
           screenOptions={{
