@@ -1,26 +1,14 @@
-import { View, Text, Pressable, ScrollView, Alert, ActivityIndicator } from "react-native";
+import { View, Pressable, ScrollView, Alert, ActivityIndicator } from "react-native";
+import { Text, TextBold, TextSemibold, TextMedium } from "@/components/ui/Text";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import { LinearGradient } from "expo-linear-gradient";
 import { router, useFocusEffect } from "expo-router";
 import { useState, useCallback } from "react";
+import Animated, { FadeIn, FadeInDown } from "react-native-reanimated";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
 import { Match } from "@/types/database";
-
-const tierColors: Record<string, [string, string]> = {
-  bronze: ["#CD7F32", "#8B4513"],
-  silver: ["#C0C0C0", "#808080"],
-  gold: ["#FFD700", "#DAA520"],
-  diamond: ["#B9F2FF", "#4169E1"],
-};
-
-const tierNames: Record<string, string> = {
-  bronze: "Bronze",
-  silver: "Silver",
-  gold: "Gold",
-  diamond: "Diamond",
-};
+import { Logo } from "@/components/AnimatedLogo";
 
 interface MatchHistoryItem {
   id: string;
@@ -66,14 +54,13 @@ export default function ProfileScreen() {
         .select("*")
         .or(`player1_id.eq.${userId},player2_id.eq.${userId}`)
         .order("ended_at", { ascending: false })
-        .limit(20);
+        .limit(10);
 
       if (!matches || matches.length === 0) {
         setMatchHistory([]);
         return;
       }
 
-      // Gather opponent IDs for human matches
       const opponentIds = matches
         .filter((m) => !m.is_bot_match)
         .map((m) => (m.player1_id === userId ? m.player2_id : m.player1_id))
@@ -140,7 +127,8 @@ export default function ProfileScreen() {
   if (!profile) {
     return (
       <SafeAreaView className="flex-1 bg-dark items-center justify-center">
-        <ActivityIndicator size="large" color="#39FF14" />
+        <Logo size="small" />
+        <ActivityIndicator size="small" color="#39FF14" style={{ marginTop: 16 }} />
       </SafeAreaView>
     );
   }
@@ -150,10 +138,6 @@ export default function ProfileScreen() {
   const totalMatches = wins + losses;
   const winRate = totalMatches > 0 ? Math.round((wins / totalMatches) * 100) : 0;
   const tier = profile.tier ?? "bronze";
-  const memberSince = new Date(profile.created_at).toLocaleDateString("en-US", {
-    month: "short",
-    year: "numeric",
-  });
 
   const formatDate = (dateStr: string) => {
     const d = new Date(dateStr);
@@ -173,170 +157,166 @@ export default function ProfileScreen() {
     <SafeAreaView className="flex-1 bg-dark" edges={["bottom"]}>
       <ScrollView className="flex-1" contentContainerStyle={{ paddingBottom: 20 }}>
         {/* Profile Header */}
-        <View className="items-center pt-6 pb-4">
-          <View className="w-24 h-24 rounded-full bg-dark-card border-2 border-primary items-center justify-center mb-3">
-            <Ionicons name="person" size={40} color="#39FF14" />
+        <Animated.View
+          entering={FadeIn.duration(400)}
+          className="items-center pt-6 pb-6 px-6"
+        >
+          {/* Avatar */}
+          <View className="w-20 h-20 rounded-full bg-dark-card border-2 border-primary items-center justify-center mb-4">
+            <TextBold className="text-primary text-3xl">
+              {(profile.username?.[0] ?? "?").toUpperCase()}
+            </TextBold>
           </View>
 
-          <Text className="text-2xl font-bold text-white">@{profile.username}</Text>
+          <TextBold className="text-white text-2xl">@{profile.username}</TextBold>
 
-          <LinearGradient
-            colors={tierColors[tier] ?? tierColors.bronze}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            className="px-4 py-1 rounded-full mt-2"
-          >
-            <Text className="text-white font-bold text-sm">
-              {tierNames[tier] ?? "Bronze"} Player
-            </Text>
-          </LinearGradient>
-
-          <Text className="text-gray-500 text-sm mt-2">
-            Member since {memberSince}
-          </Text>
-        </View>
-
-        {/* Stats Grid */}
-        <View className="mx-6 mt-4 bg-dark-card rounded-2xl p-5 border border-dark-border">
-          <Text className="text-white font-bold text-lg mb-4">Statistics</Text>
-
-          <View className="flex-row flex-wrap">
-            <View className="w-1/2 mb-4">
-              <Text className="text-gray-400 text-sm">Rating</Text>
-              <Text className="text-white text-2xl font-bold">{profile.rating}</Text>
+          {/* Rating Badge */}
+          <View className="flex-row items-center mt-3">
+            <View className="bg-dark-card border border-primary/30 px-4 py-2 rounded-full">
+              <View className="flex-row items-center">
+                <Ionicons name="diamond-outline" size={14} color="#39FF14" />
+                <TextBold className="text-primary text-sm ml-1.5">{profile.rating}</TextBold>
+              </View>
             </View>
+            {globalRank && (
+              <View className="bg-dark-card border border-dark-border px-3 py-2 rounded-full ml-2">
+                <Text className="text-gray-400 text-sm">#{globalRank} Global</Text>
+              </View>
+            )}
+          </View>
+        </Animated.View>
 
-            <View className="w-1/2 mb-4">
-              <Text className="text-gray-400 text-sm">Global Rank</Text>
-              <Text className="text-white text-2xl font-bold">
-                {globalRank ? `#${globalRank}` : "--"}
-              </Text>
+        {/* Quick Stats Grid */}
+        <Animated.View
+          entering={FadeInDown.delay(100).duration(400)}
+          className="mx-6 mb-6"
+        >
+          <View className="flex-row">
+            <View className="flex-1 bg-dark-card border border-dark-border rounded-xl p-4 mr-2 items-center">
+              <TextBold className="text-win text-2xl">{wins}</TextBold>
+              <Text className="text-gray-500 text-xs uppercase mt-1">Wins</Text>
             </View>
-
-            <View className="w-1/2 mb-4">
-              <Text className="text-gray-400 text-sm">Total Matches</Text>
-              <Text className="text-white text-2xl font-bold">{totalMatches}</Text>
+            <View className="flex-1 bg-dark-card border border-dark-border rounded-xl p-4 mr-2 items-center">
+              <TextBold className="text-lose text-2xl">{losses}</TextBold>
+              <Text className="text-gray-500 text-xs uppercase mt-1">Losses</Text>
             </View>
-
-            <View className="w-1/2 mb-4">
-              <Text className="text-gray-400 text-sm">Win Rate</Text>
-              <Text className="text-white text-2xl font-bold">{winRate}%</Text>
-            </View>
-
-            <View className="w-1/2 mb-4">
-              <Text className="text-gray-400 text-sm">Wins</Text>
-              <Text className="text-win text-2xl font-bold">{wins}</Text>
-            </View>
-
-            <View className="w-1/2 mb-4">
-              <Text className="text-gray-400 text-sm">Losses</Text>
-              <Text className="text-lose text-2xl font-bold">{losses}</Text>
-            </View>
-
-            <View className="w-1/2">
-              <Text className="text-gray-400 text-sm">Streak Freezes</Text>
-              <Text className="text-secondary text-2xl font-bold">
-                {profile.streak_freezes ?? 0}
-              </Text>
+            <View className="flex-1 bg-dark-card border border-dark-border rounded-xl p-4 items-center">
+              <TextBold className="text-white text-2xl">{winRate}%</TextBold>
+              <Text className="text-gray-500 text-xs uppercase mt-1">Win Rate</Text>
             </View>
           </View>
-        </View>
+        </Animated.View>
 
         {/* Streak Card */}
-        <View className="mx-6 mt-4 bg-dark-card rounded-2xl p-5 border border-dark-border">
-          <View className="flex-row items-center mb-3">
-            <Text className="text-2xl mr-2">🔥</Text>
-            <Text className="text-white font-bold text-lg">Streak</Text>
-          </View>
-
-          <View className="flex-row justify-between">
-            <View>
-              <Text className="text-gray-400 text-sm">Current</Text>
-              <Text className="text-accent text-3xl font-bold">
-                {profile.current_streak ?? 0} days
-              </Text>
+        <Animated.View
+          entering={FadeInDown.delay(200).duration(400)}
+          className="mx-6 mb-6"
+        >
+          <View className="bg-dark-card border border-dark-border rounded-xl p-4">
+            <View className="flex-row items-center justify-between">
+              <View className="flex-row items-center">
+                <Ionicons name="flame" size={20} color="#FF6B35" />
+                <TextSemibold className="text-white ml-2">Streak</TextSemibold>
+              </View>
+              <View className="flex-row items-center">
+                <View className="items-end mr-6">
+                  <TextBold className="text-accent text-xl">{profile.current_streak ?? 0}</TextBold>
+                  <Text className="text-gray-500 text-xs">Current</Text>
+                </View>
+                <View className="items-end">
+                  <TextBold className="text-white text-xl">{profile.best_streak ?? 0}</TextBold>
+                  <Text className="text-gray-500 text-xs">Best</Text>
+                </View>
+              </View>
             </View>
-            <View className="items-end">
-              <Text className="text-gray-400 text-sm">Best</Text>
-              <Text className="text-white text-3xl font-bold">
-                {profile.best_streak ?? 0} days
-              </Text>
-            </View>
           </View>
-        </View>
+        </Animated.View>
 
         {/* Match History */}
-        <View className="mx-6 mt-4 bg-dark-card rounded-2xl p-5 border border-dark-border">
-          <Text className="text-white font-bold text-lg mb-4">Recent Matches</Text>
+        <Animated.View
+          entering={FadeInDown.delay(300).duration(400)}
+          className="mx-6 mb-6"
+        >
+          <View className="flex-row items-center justify-between mb-3">
+            <TextSemibold className="text-white">Recent Matches</TextSemibold>
+            <Text className="text-gray-500 text-xs">{totalMatches} total</Text>
+          </View>
 
-          {loadingHistory ? (
-            <ActivityIndicator size="small" color="#39FF14" />
-          ) : matchHistory.length === 0 ? (
-            <Text className="text-gray-500 text-center py-4">
-              No matches yet. Go battle!
-            </Text>
-          ) : (
-            matchHistory.map((match) => (
-              <View
-                key={match.id}
-                className="flex-row items-center justify-between py-3 border-b border-dark-border last:border-b-0"
-              >
-                <View className="flex-row items-center flex-1">
-                  <View
-                    className={`w-8 h-8 rounded-full items-center justify-center mr-3 ${
-                      match.won ? "bg-win/20" : "bg-lose/20"
-                    }`}
-                  >
-                    <Ionicons
-                      name={match.won ? "trophy" : "close"}
-                      size={16}
-                      color={match.won ? "#22C55E" : "#EF4444"}
-                    />
-                  </View>
-                  <View>
-                    <Text className="text-white font-semibold">
-                      vs {match.opponentName}
-                      {match.isBotMatch ? " 🤖" : ""}
-                    </Text>
-                    <Text className="text-gray-500 text-xs">
-                      {match.playerScore}-{match.opponentScore} · {formatDate(match.date)}
-                    </Text>
-                  </View>
-                </View>
-
-                {match.ratingChange != null && (
-                  <Text
-                    className={`font-bold ${
-                      match.ratingChange >= 0 ? "text-win" : "text-lose"
-                    }`}
-                  >
-                    {match.ratingChange >= 0 ? "+" : ""}
-                    {match.ratingChange}
-                  </Text>
-                )}
+          <View className="bg-dark-card border border-dark-border rounded-xl overflow-hidden">
+            {loadingHistory ? (
+              <View className="p-4 items-center">
+                <ActivityIndicator size="small" color="#39FF14" />
               </View>
-            ))
-          )}
-        </View>
+            ) : matchHistory.length === 0 ? (
+              <View className="p-6 items-center">
+                <Ionicons name="game-controller-outline" size={32} color="#6B7280" />
+                <Text className="text-gray-500 text-sm mt-2">No matches yet</Text>
+                <Text className="text-gray-600 text-xs mt-1">Play your first battle!</Text>
+              </View>
+            ) : (
+              matchHistory.map((match, index) => (
+                <View
+                  key={match.id}
+                  className={`flex-row items-center justify-between p-4 ${
+                    index < matchHistory.length - 1 ? "border-b border-dark-border" : ""
+                  }`}
+                >
+                  <View className="flex-row items-center flex-1">
+                    <View
+                      className={`w-8 h-8 rounded-full items-center justify-center mr-3 ${
+                        match.won ? "bg-win/20" : "bg-lose/20"
+                      }`}
+                    >
+                      <Ionicons
+                        name={match.won ? "checkmark" : "close"}
+                        size={16}
+                        color={match.won ? "#22C55E" : "#EF4444"}
+                      />
+                    </View>
+                    <View className="flex-1">
+                      <TextMedium className="text-white">
+                        vs {match.opponentName}
+                      </TextMedium>
+                      <Text className="text-gray-500 text-xs">
+                        {match.playerScore}-{match.opponentScore} • {formatDate(match.date)}
+                      </Text>
+                    </View>
+                  </View>
+
+                  {match.ratingChange != null && (
+                    <TextSemibold
+                      className={match.ratingChange >= 0 ? "text-win" : "text-lose"}
+                    >
+                      {match.ratingChange >= 0 ? "+" : ""}{match.ratingChange}
+                    </TextSemibold>
+                  )}
+                </View>
+              ))
+            )}
+          </View>
+        </Animated.View>
 
         {/* Action Buttons */}
-        <View className="mx-6 mt-6">
+        <Animated.View
+          entering={FadeInDown.delay(400).duration(400)}
+          className="mx-6"
+        >
           <Pressable
             onPress={() => router.push("/modal")}
-            className="flex-row items-center justify-center bg-dark-card rounded-xl p-4 border border-dark-border mb-3 active:bg-dark-border"
+            className="flex-row items-center justify-center bg-dark-card border border-dark-border rounded-xl p-4 mb-3 active:bg-dark-elevated"
           >
-            <Ionicons name="settings-outline" size={20} color="#6B7280" />
-            <Text className="text-gray-400 font-semibold ml-2">Settings</Text>
+            <Ionicons name="settings-outline" size={18} color="#6B7280" />
+            <TextMedium className="text-gray-400 ml-2">Settings</TextMedium>
           </Pressable>
 
           <Pressable
             onPress={handleSignOut}
-            className="flex-row items-center justify-center bg-dark-card rounded-xl p-4 border border-lose/30 active:bg-lose/10"
+            className="flex-row items-center justify-center bg-dark-card border border-lose/30 rounded-xl p-4 active:bg-lose/10"
           >
-            <Ionicons name="log-out-outline" size={20} color="#EF4444" />
-            <Text className="text-lose font-semibold ml-2">Sign Out</Text>
+            <Ionicons name="log-out-outline" size={18} color="#EF4444" />
+            <TextMedium className="text-lose ml-2">Sign Out</TextMedium>
           </Pressable>
-        </View>
+        </Animated.View>
       </ScrollView>
     </SafeAreaView>
   );

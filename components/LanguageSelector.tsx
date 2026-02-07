@@ -6,10 +6,10 @@ import Animated, {
   useAnimatedStyle,
   useSharedValue,
   withSpring,
+  withTiming,
   FadeIn,
-  FadeOut,
   SlideInDown,
-  SlideOutDown,
+  Easing,
 } from "react-native-reanimated";
 
 export interface Language {
@@ -91,7 +91,7 @@ export function LanguageSelector({ selectedLanguage, onSelect }: LanguageSelecto
         >
           <Pressable onPress={(e) => e.stopPropagation()}>
             <Animated.View
-              entering={SlideInDown.springify().damping(20)}
+              entering={SlideInDown.duration(300).easing(Easing.out(Easing.cubic))}
               className="bg-dark-card border-t border-dark-border rounded-t-3xl"
             >
               {/* Handle bar */}
@@ -109,7 +109,7 @@ export function LanguageSelector({ selectedLanguage, onSelect }: LanguageSelecto
 
               {/* Options */}
               <View className="px-4 py-4">
-                {LANGUAGES.map((lang, index) => {
+                {LANGUAGES.map((lang) => {
                   const isSelected = selectedLanguage === lang.id;
                   return (
                     <Pressable

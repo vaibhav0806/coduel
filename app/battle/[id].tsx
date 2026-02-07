@@ -22,7 +22,6 @@ import { useBattle } from "@/hooks/useBattle";
 import { useAuth } from "@/contexts/AuthContext";
 import { useShareCard } from "@/hooks/useShareCard";
 import { ShareCard } from "@/components/ShareCard";
-import { LinearGradient } from "expo-linear-gradient";
 import { createBotMatch } from "@/lib/supabase";
 
 export default function BattleScreen() {
@@ -287,17 +286,10 @@ export default function BattleScreen() {
         >
           <Pressable
             onPress={handleBattle}
-            className="overflow-hidden rounded-2xl"
+            className="bg-dark-card border-2 border-primary rounded-2xl p-4 flex-row items-center justify-center active:bg-dark-elevated"
           >
-            <LinearGradient
-              colors={["#39FF14", "#2DD10D"]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              className="p-4 flex-row items-center justify-center"
-            >
-              <Ionicons name="flash" size={22} color="#FFFFFF" />
-              <TextBold className="text-white text-lg ml-2">Play Again</TextBold>
-            </LinearGradient>
+            <Ionicons name="flash" size={22} color="#39FF14" />
+            <TextBold className="text-primary text-lg ml-2">Play Again</TextBold>
           </Pressable>
         </Animated.View>
       </SafeAreaView>
@@ -479,9 +471,9 @@ export default function BattleScreen() {
             </Text>
             <Pressable
               onPress={battle.nextRound}
-              className="bg-primary rounded-xl p-3 mt-4"
+              className="bg-dark-card border-2 border-primary rounded-xl p-3 mt-4 active:bg-dark-elevated"
             >
-              <Text className="text-white text-center font-bold">
+              <Text className="text-primary text-center font-bold">
                 {(battle.player?.score ?? 0) >= 2 ||
                 (battle.opponent?.score ?? 0) >= 2 ||
                 battle.currentRound >= battle.totalRounds

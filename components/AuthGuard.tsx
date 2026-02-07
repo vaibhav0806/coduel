@@ -1,7 +1,9 @@
 import { useEffect, useState, useRef } from "react";
-import { View, ActivityIndicator, Text } from "react-native";
+import { View, ActivityIndicator } from "react-native";
 import { useRouter, useSegments, useRootNavigationState } from "expo-router";
 import { useAuth } from "@/contexts/AuthContext";
+import { Logo } from "@/components/AnimatedLogo";
+import { Text } from "@/components/ui/Text";
 
 export function AuthGuard({ children }: { children: React.ReactNode }) {
   const { user, profile, loading } = useAuth();
@@ -10,19 +12,6 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
   const navigationState = useRootNavigationState();
   const [isNavigationReady, setIsNavigationReady] = useState(false);
   const hasRedirected = useRef(false);
-
-  // Debug logging
-  useEffect(() => {
-    console.log("[AuthGuard] State:", {
-      loading,
-      user: !!user,
-      profile: !!profile,
-      profileUsername: profile?.username,
-      isNavigationReady,
-      segments,
-      hasRedirected: hasRedirected.current
-    });
-  }, [loading, user, profile, isNavigationReady, segments]);
 
   useEffect(() => {
     if (navigationState?.key) {
@@ -40,7 +29,6 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
     // Not authenticated - redirect to auth
     if (!user) {
       if (!inAuthGroup) {
-        console.log("[AuthGuard] No user, redirecting to auth");
         router.replace("/auth");
       }
       return;
@@ -51,10 +39,9 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
     const needsOnboarding = !profile || !profile.username || profile.username.startsWith("user_");
 
     if (needsOnboarding && !inOnboarding) {
-      console.log("[AuthGuard] Needs onboarding, redirecting");
       router.replace("/onboarding");
     } else if (!needsOnboarding && (inAuthGroup || inOnboarding)) {
-      console.log("[AuthGuard] Has valid profile, redirecting to tabs");
+      // Has valid profile, go to tabs immediately
       router.replace("/(tabs)");
     }
   }, [user, profile, loading, segments, isNavigationReady]);
@@ -63,8 +50,8 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
   if (loading || !isNavigationReady) {
     return (
       <View className="flex-1 bg-dark items-center justify-center">
-        <Text className="text-4xl mb-4">⚡</Text>
-        <ActivityIndicator size="large" color="#39FF14" />
+        <Logo size="medium" />
+        <ActivityIndicator size="small" color="#39FF14" style={{ marginTop: 24 }} />
       </View>
     );
   }

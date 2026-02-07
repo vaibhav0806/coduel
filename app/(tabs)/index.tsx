@@ -3,7 +3,6 @@ import { Text, TextBold, TextSemibold, TextMedium } from "@/components/ui/Text";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router, useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { LinearGradient } from "expo-linear-gradient";
 import { useState, useCallback, useRef, useEffect } from "react";
 import Animated, {
   useSharedValue,
@@ -28,20 +27,6 @@ import { RealtimeChannel } from "@supabase/supabase-js";
 import { getWeekStart } from "@/lib/league";
 import { LanguageSelector } from "@/components/LanguageSelector";
 
-const tierColors: Record<string, [string, string]> = {
-  bronze: ["#CD7F32", "#8B4513"],
-  silver: ["#C0C0C0", "#808080"],
-  gold: ["#FFD700", "#DAA520"],
-  diamond: ["#B9F2FF", "#4169E1"],
-};
-
-const tierEmoji: Record<string, string> = {
-  bronze: "🥉",
-  silver: "🥈",
-  gold: "🥇",
-  diamond: "💎",
-};
-
 export default function HomeScreen() {
   const { user, profile, refreshProfile } = useAuth();
   const [isMatchmaking, setIsMatchmaking] = useState(false);
@@ -51,24 +36,7 @@ export default function HomeScreen() {
   const channelRef = useRef<RealtimeChannel | null>(null);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Glow animation for battle button
-  const glowOpacity = useSharedValue(0.4);
   const buttonScale = useSharedValue(1);
-
-  useEffect(() => {
-    glowOpacity.value = withRepeat(
-      withSequence(
-        withTiming(0.8, { duration: 1500, easing: Easing.inOut(Easing.ease) }),
-        withTiming(0.4, { duration: 1500, easing: Easing.inOut(Easing.ease) })
-      ),
-      -1,
-      false
-    );
-  }, []);
-
-  const glowStyle = useAnimatedStyle(() => ({
-    opacity: glowOpacity.value,
-  }));
 
   const buttonAnimatedStyle = useAnimatedStyle(() => ({
     transform: [{ scale: buttonScale.value }],
@@ -139,8 +107,8 @@ export default function HomeScreen() {
       params: {
         id: matchId,
         opponentUsername,
-        opponentRating: String(opponentRating),
-        isBotMatch: String(isBotMatch),
+        opponentRating: opponentRating.toString(),
+        isBotMatch: isBotMatch.toString(),
       },
     });
   };
@@ -148,53 +116,40 @@ export default function HomeScreen() {
   const handleBattle = async () => {
     if (!user) return;
 
-    // Button press animation
-    buttonScale.value = withSequence(
-      withSpring(0.95, { damping: 15 }),
-      withSpring(1, { damping: 15 })
-    );
-
     setIsMatchmaking(true);
     setMatchmakingText("Finding opponent...");
 
     let navigated = false;
 
-    console.log("[Matchmaking] Setting 5s bot fallback timer...");
+    // Bot fallback after timeout
     timeoutRef.current = setTimeout(async () => {
-      timeoutRef.current = null;
       if (navigated) return;
-      console.log("[Matchmaking] Timer fired, creating bot match...");
+      navigated = true;
+
+      if (channelRef.current) {
+        channelRef.current.unsubscribe();
+        channelRef.current = null;
+      }
+
       setMatchmakingText("Creating bot match...");
-
       try {
-        const botResult = await createBotMatch(user.id, true, selectedLanguage);
-        console.log("[Matchmaking] Bot match result:", JSON.stringify(botResult));
-        if (navigated) return;
-        navigated = true;
-
-        if (channelRef.current) {
-          channelRef.current.unsubscribe();
-          channelRef.current = null;
-        }
-
+        const result = await createBotMatch(user.id, true, selectedLanguage);
         navigateToBattle(
-          botResult.match_id,
-          botResult.opponent_username,
-          botResult.opponent_rating,
+          result.match_id,
+          result.opponent_username,
+          result.opponent_rating,
           true
         );
       } catch (err) {
-        console.error("[Matchmaking] Bot match failed:", err);
-        if (!navigated) setIsMatchmaking(false);
+        console.error("[Matchmaking] Bot fallback failed:", err);
+        setIsMatchmaking(false);
       }
-    }, 5000);
+    }, 10000);
 
     try {
-      console.log("[Matchmaking] Joining queue...");
       const result = await joinMatchQueue(user.id, true, selectedLanguage);
-      console.log("[Matchmaking] Queue result:", JSON.stringify(result));
 
-      if (result.status === "matched" && !navigated) {
+      if (result.status === "matched") {
         navigated = true;
         if (timeoutRef.current) {
           clearTimeout(timeoutRef.current);
@@ -214,7 +169,6 @@ export default function HomeScreen() {
 
       channel
         .on("broadcast", { event: "match_found" }, ({ payload }) => {
-          console.log("[Matchmaking] match_found event:", JSON.stringify(payload));
           if (navigated) return;
           navigated = true;
 
@@ -234,7 +188,7 @@ export default function HomeScreen() {
         })
         .subscribe();
     } catch (err) {
-      console.error("[Matchmaking] Queue failed (bot fallback will handle it):", err);
+      console.error("[Matchmaking] Queue failed:", err);
     }
   };
 
@@ -301,16 +255,12 @@ export default function HomeScreen() {
                 {profile?.username ?? "Coder"}
               </TextBold>
             </View>
-            <View className="flex-row items-center">
-              <LinearGradient
-                colors={tierColors[tier] ?? tierColors.bronze}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                className="px-3 py-1.5 rounded-full flex-row items-center"
-              >
-                <RNText className="mr-1">{tierEmoji[tier] ?? "🥉"}</RNText>
-                <TextBold className="text-white text-sm">{rating}</TextBold>
-              </LinearGradient>
+            {/* Rating Badge - Clean, no medals */}
+            <View className="bg-dark-card border border-primary/30 px-4 py-2 rounded-full">
+              <View className="flex-row items-center">
+                <Ionicons name="diamond-outline" size={14} color="#39FF14" />
+                <TextBold className="text-primary text-sm ml-1.5">{rating}</TextBold>
+              </View>
             </View>
           </View>
         </Animated.View>
@@ -338,7 +288,7 @@ export default function HomeScreen() {
             <View className="flex-1 bg-dark-card border border-dark-border rounded-xl p-3">
               <View className="flex-row items-center justify-between">
                 <Text className="text-gray-500 text-xs uppercase tracking-wide">Streak</Text>
-                <RNText className="text-sm">🔥</RNText>
+                <Ionicons name="flame-outline" size={14} color="#FF6B35" />
               </View>
               <TextBold className="text-accent text-xl mt-1">{streak}</TextBold>
             </View>
@@ -356,44 +306,42 @@ export default function HomeScreen() {
           />
         </Animated.View>
 
-        {/* Battle Button */}
+        {/* Battle Button - Black background with green border */}
         <Animated.View
           entering={FadeInDown.delay(300).duration(400)}
-          className="mx-6 mt-2"
+          className="mx-6 mt-4"
         >
-          <Pressable onPress={handleBattle}>
-            <Animated.View style={buttonAnimatedStyle}>
-              {/* Glow effect */}
-              <Animated.View
-                style={glowStyle}
-                className="absolute inset-0 rounded-2xl bg-primary"
-                pointerEvents="none"
-              />
-              <LinearGradient
-                colors={["#39FF14", "#2DD10D"]}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                className="rounded-2xl p-5 border border-primary/50"
-              >
-                <View className="flex-row items-center justify-center">
-                  <View className="w-12 h-12 bg-white/20 rounded-full items-center justify-center mr-3">
-                    <Ionicons name="flash" size={24} color="#FFFFFF" />
-                  </View>
-                  <View>
-                    <TextBold className="text-white text-2xl tracking-wide">
-                      BATTLE
-                    </TextBold>
-                    <Text className="text-white/60 text-sm">
-                      Find a worthy opponent
-                    </Text>
-                  </View>
+          <Pressable
+            onPress={handleBattle}
+            onPressIn={() => {
+              buttonScale.value = withSpring(0.98, { damping: 20, stiffness: 300 });
+            }}
+            onPressOut={() => {
+              buttonScale.value = withSpring(1, { damping: 20, stiffness: 300 });
+            }}
+          >
+            <Animated.View
+              style={buttonAnimatedStyle}
+              className="bg-dark-card border-2 border-primary rounded-2xl p-5"
+            >
+              <View className="flex-row items-center justify-center">
+                <View className="w-12 h-12 bg-primary/20 rounded-full items-center justify-center mr-3">
+                  <Ionicons name="flash" size={24} color="#39FF14" />
                 </View>
-              </LinearGradient>
+                <View>
+                  <TextBold className="text-primary text-2xl tracking-wide">
+                    BATTLE
+                  </TextBold>
+                  <Text className="text-gray-500 text-sm">
+                    Find a worthy opponent
+                  </Text>
+                </View>
+              </View>
             </Animated.View>
           </Pressable>
         </Animated.View>
 
-        {/* Practice Button */}
+        {/* Practice Button - Black background */}
         <Animated.View
           entering={FadeInDown.delay(400).duration(400)}
           className="mx-6 mt-3"
@@ -419,13 +367,13 @@ export default function HomeScreen() {
             {/* Header */}
             <View className="flex-row items-center justify-between px-4 py-3 border-b border-dark-border">
               <View className="flex-row items-center">
-                <Ionicons name="podium-outline" size={18} color="#FF6B35" />
+                <Ionicons name="podium-outline" size={18} color="#39FF14" />
                 <TextBold className="text-white ml-2">Weekly League</TextBold>
               </View>
-              <View className="bg-accent/20 px-2 py-0.5 rounded-full">
-                <TextMedium className="text-accent text-xs">
+              <View className="bg-dark-border px-2 py-0.5 rounded-full">
+                <Text className="text-gray-400 text-xs">
                   {tier.charAt(0).toUpperCase() + tier.slice(1)}
-                </TextMedium>
+                </Text>
               </View>
             </View>
 
@@ -467,7 +415,6 @@ export default function HomeScreen() {
             </View>
           </View>
         </Animated.View>
-
       </ScrollView>
 
       {/* Matchmaking Overlay */}
@@ -496,7 +443,7 @@ export default function HomeScreen() {
 
             <Pressable
               onPress={handleCancelMatchmaking}
-              className="mt-8 px-8 py-3 border border-dark-border rounded-xl active:bg-dark-card"
+              className="mt-8 px-8 py-3 bg-dark-card border border-dark-border rounded-xl active:bg-dark-elevated"
             >
               <TextMedium className="text-gray-400">Cancel</TextMedium>
             </Pressable>
@@ -538,7 +485,7 @@ function PulsingRing({ delay }: { delay: number }) {
   return (
     <Animated.View
       style={animatedStyle}
-      className="absolute w-16 h-16 rounded-full border-2 border-primary"
+      className="absolute w-32 h-32 rounded-full border-2 border-primary"
     />
   );
 }

@@ -7,10 +7,7 @@ import Animated, {
   withTiming,
   withRepeat,
   withSequence,
-  withDelay,
   Easing,
-  interpolate,
-  runOnJS,
 } from "react-native-reanimated";
 
 interface AnimatedLogoProps {
@@ -20,9 +17,9 @@ interface AnimatedLogoProps {
 }
 
 const sizeConfig = {
-  small: { fontSize: 24, cursorSize: 20, spacing: 2 },
-  medium: { fontSize: 36, cursorSize: 28, spacing: 3 },
-  large: { fontSize: 48, cursorSize: 38, spacing: 4 },
+  small: { fontSize: 24, cursorWidth: 2 },
+  medium: { fontSize: 36, cursorWidth: 2 },
+  large: { fontSize: 48, cursorWidth: 3 },
 };
 
 export function AnimatedLogo({
@@ -32,22 +29,22 @@ export function AnimatedLogo({
 }: AnimatedLogoProps) {
   const config = sizeConfig[size];
   const [displayText, setDisplayText] = useState(animate ? "" : "oduel");
+  const [showClosing, setShowClosing] = useState(!animate);
 
   // Animation values
   const cursorOpacity = useSharedValue(1);
-  const cursorPosition = useSharedValue(0);
-  const letterOpacity = useSharedValue(0);
 
   const text = "oduel";
 
   useEffect(() => {
     if (!animate) {
       setDisplayText(text);
-      letterOpacity.value = 1;
+      setShowClosing(true);
+      cursorOpacity.value = 0;
       return;
     }
 
-    // Blinking cursor animation
+    // Blinking cursor animation - faster blink
     cursorOpacity.value = withRepeat(
       withSequence(
         withTiming(0, { duration: 400 }),
@@ -57,7 +54,7 @@ export function AnimatedLogo({
       false
     );
 
-    // Type out letters one by one
+    // Type out letters one by one - crisp and quick (80ms per letter)
     let currentIndex = 0;
     const typeInterval = setInterval(() => {
       if (currentIndex < text.length) {
@@ -65,15 +62,17 @@ export function AnimatedLogo({
         currentIndex++;
       } else {
         clearInterval(typeInterval);
-        // Stop cursor blinking after typing is done
+        // Show closing bracket immediately after typing
+        setShowClosing(true);
+        cursorOpacity.value = withTiming(0, { duration: 150 });
+        // Quick callback after bracket appears
         setTimeout(() => {
-          cursorOpacity.value = withTiming(0, { duration: 200 });
           if (onAnimationComplete) {
             onAnimationComplete();
           }
-        }, 800);
+        }, 300);
       }
-    }, 150);
+    }, 80); // 80ms per letter = crisp typing
 
     return () => clearInterval(typeInterval);
   }, [animate]);
@@ -84,50 +83,40 @@ export function AnimatedLogo({
 
   return (
     <View className="flex-row items-center justify-center">
-      {/* Opening bracket/cursor */}
-      <View className="relative">
-        <TextBold
-          style={{ fontSize: config.fontSize, color: "#39FF14" }}
-        >
-          {"<"}
-        </TextBold>
-        {/* Blinking cursor line */}
-        <Animated.View
-          style={[
-            cursorAnimatedStyle,
-            {
-              position: "absolute",
-              right: -2,
-              top: "15%",
-              height: "70%",
-              width: 3,
-              backgroundColor: "#39FF14",
-              borderRadius: 1,
-            },
-          ]}
-        />
-      </View>
+      {/* Opening bracket */}
+      <TextBold style={{ fontSize: config.fontSize, color: "#39FF14" }}>
+        {"<"}
+      </TextBold>
 
       {/* Typed text */}
       <TextBold
         style={{
           fontSize: config.fontSize,
           color: "#FFFFFF",
-          marginLeft: config.spacing,
         }}
       >
         {displayText}
       </TextBold>
 
+      {/* Blinking cursor */}
+      {!showClosing && (
+        <Animated.View
+          style={[
+            cursorAnimatedStyle,
+            {
+              width: config.cursorWidth,
+              height: config.fontSize * 0.8,
+              backgroundColor: "#39FF14",
+              marginLeft: 2,
+              borderRadius: 1,
+            },
+          ]}
+        />
+      )}
+
       {/* Closing bracket - appears after text is done */}
-      {displayText.length === text.length && (
-        <TextBold
-          style={{
-            fontSize: config.fontSize,
-            color: "#39FF14",
-            marginLeft: config.spacing,
-          }}
-        >
+      {showClosing && (
+        <TextBold style={{ fontSize: config.fontSize, color: "#39FF14" }}>
           {"/>"}
         </TextBold>
       )}
@@ -144,10 +133,10 @@ export function Logo({ size = "medium" }: { size?: "small" | "medium" | "large" 
       <TextBold style={{ fontSize: config.fontSize, color: "#39FF14" }}>
         {"<"}
       </TextBold>
-      <TextBold style={{ fontSize: config.fontSize, color: "#FFFFFF", marginLeft: config.spacing }}>
+      <TextBold style={{ fontSize: config.fontSize, color: "#FFFFFF" }}>
         oduel
       </TextBold>
-      <TextBold style={{ fontSize: config.fontSize, color: "#39FF14", marginLeft: config.spacing }}>
+      <TextBold style={{ fontSize: config.fontSize, color: "#39FF14" }}>
         {"/>"}
       </TextBold>
     </View>

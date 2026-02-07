@@ -79,13 +79,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // Supabase call here would hang forever.
         if (session?.user) {
           const userId = session.user.id;
-          setTimeout(() => {
-            if (mounted) fetchProfile(userId);
+          // Keep loading true until profile is fetched
+          setLoading(true);
+          setTimeout(async () => {
+            if (mounted) {
+              await fetchProfile(userId);
+              setLoading(false);
+            }
           }, 0);
         } else {
           setProfile(null);
+          setLoading(false);
         }
-        setLoading(false);
       }
     );
 

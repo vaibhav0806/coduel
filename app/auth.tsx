@@ -1,8 +1,17 @@
-import { View, Text, Pressable, ActivityIndicator, Alert, Platform } from "react-native";
+import { View, Pressable, ActivityIndicator, Alert, Platform } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useState } from "react";
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withTiming,
+  withDelay,
+  Easing,
+  FadeIn,
+  FadeInUp,
+} from "react-native-reanimated";
 import {
   GoogleSignin,
   isSuccessResponse,
@@ -10,10 +19,11 @@ import {
   statusCodes,
 } from "@react-native-google-signin/google-signin";
 import { supabase } from "@/lib/supabase";
+import { AnimatedLogo, Logo } from "@/components/AnimatedLogo";
+import { Text, TextBold, TextSemibold } from "@/components/ui/Text";
 
 // Configure Google Sign-In
 const WEB_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID;
-console.log("[Auth] Web Client ID:", WEB_CLIENT_ID);
 
 GoogleSignin.configure({
   webClientId: WEB_CLIENT_ID,
@@ -23,6 +33,33 @@ GoogleSignin.configure({
 export default function AuthScreen() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [animationComplete, setAnimationComplete] = useState(false);
+
+  // Animation values
+  const logoTranslateY = useSharedValue(0);
+  const contentOpacity = useSharedValue(0);
+
+  const handleAnimationComplete = () => {
+    // Move logo up
+    logoTranslateY.value = withTiming(-80, {
+      duration: 600,
+      easing: Easing.out(Easing.cubic),
+    });
+    // Fade in content
+    contentOpacity.value = withDelay(
+      300,
+      withTiming(1, { duration: 500 })
+    );
+    setAnimationComplete(true);
+  };
+
+  const logoAnimatedStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: logoTranslateY.value }],
+  }));
+
+  const contentAnimatedStyle = useAnimatedStyle(() => ({
+    opacity: contentOpacity.value,
+  }));
 
   // Sign in with Google token
   const handleGoogleToken = async (idToken: string) => {
@@ -32,9 +69,7 @@ export default function AuthScreen() {
         token: idToken,
       });
 
-      if (signInError) {
-        throw signInError;
-      }
+      if (signInError) throw signInError;
 
       if (data.user) {
         // Check if user has a profile with custom username
@@ -47,10 +82,8 @@ export default function AuthScreen() {
         const username = profile?.username;
 
         if (!username || username.startsWith("user_")) {
-          // New user - needs to set username
           router.replace("/onboarding");
         } else {
-          // Existing user - go to home
           router.replace("/(tabs)");
         }
       }
@@ -89,7 +122,6 @@ export default function AuthScreen() {
             setError("Google Play Services not available");
             break;
           case statusCodes.SIGN_IN_CANCELLED:
-            // User cancelled, don't show error
             break;
           default:
             setError(err.message || "Failed to sign in with Google");
@@ -102,71 +134,61 @@ export default function AuthScreen() {
     }
   };
 
-  // Apple sign in (placeholder for now)
+  // Apple sign in (placeholder)
   const handleAppleSignIn = async () => {
     Alert.alert("Coming Soon", "Apple Sign In will be available soon!");
   };
 
-  // Guest play - anonymous sign in
-  const handleGuestPlay = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-
-      const { data, error: signInError } = await supabase.auth.signInAnonymously();
-
-      if (signInError) {
-        throw signInError;
-      }
-
-      if (data.user) {
-        router.replace("/(tabs)");
-      }
-    } catch (err: any) {
-      console.error("Guest sign in error:", err);
-      setError(err.message || "Failed to continue as guest");
-    } finally {
-      setLoading(false);
-    }
-  };
-
   return (
     <SafeAreaView className="flex-1 bg-dark">
-      <View className="flex-1 px-6 justify-center">
-        {/* Logo */}
-        <View className="items-center mb-12">
-          <Text className="text-5xl mb-4">⚡</Text>
-          <Text className="text-4xl font-bold text-white">CODUEL</Text>
-          <Text className="text-gray-400 mt-2 text-center">
-            Duel coders worldwide.{"\n"}Prove your skills.
-          </Text>
-        </View>
+      <View className="flex-1 px-6 items-center justify-center">
+        {/* Animated Logo */}
+        <Animated.View style={logoAnimatedStyle} className="items-center">
+          <AnimatedLogo
+            size="large"
+            animate={true}
+            onAnimationComplete={handleAnimationComplete}
+          />
 
-        {/* Error Message */}
-        {error && (
-          <View className="bg-lose/20 border border-lose rounded-xl p-3 mb-4">
-            <Text className="text-lose text-center">{error}</Text>
-          </View>
-        )}
+          {/* Tagline - appears after logo */}
+          {animationComplete && (
+            <Animated.View entering={FadeIn.delay(100).duration(400)}>
+              <Text className="text-gray-500 text-sm mt-3">
+                Code. Battle. Win.
+              </Text>
+            </Animated.View>
+          )}
+        </Animated.View>
 
-        {/* Auth Buttons */}
-        <View>
-          {/* Google Sign In */}
+        {/* Auth Content - appears after animation */}
+        <Animated.View
+          style={contentAnimatedStyle}
+          className="w-full mt-12"
+          pointerEvents={animationComplete ? "auto" : "none"}
+        >
+          {/* Error Message */}
+          {error && (
+            <View className="bg-lose/20 border border-lose rounded-xl p-3 mb-4">
+              <Text className="text-lose text-center">{error}</Text>
+            </View>
+          )}
+
+          {/* Google Sign In Button - Black background */}
           <Pressable
             onPress={handleGoogleSignIn}
-            disabled={loading}
-            className={`bg-white rounded-xl p-4 flex-row items-center justify-center mb-3 ${
-              loading ? "opacity-50" : "active:bg-gray-100"
+            disabled={loading || !animationComplete}
+            className={`bg-dark-card border border-dark-border rounded-xl p-4 flex-row items-center justify-center mb-3 ${
+              loading ? "opacity-50" : "active:bg-dark-elevated"
             }`}
           >
             {loading ? (
-              <ActivityIndicator color="#4285F4" />
+              <ActivityIndicator color="#39FF14" />
             ) : (
               <>
-                <Ionicons name="logo-google" size={20} color="#4285F4" />
-                <Text className="text-gray-800 font-semibold ml-3 text-lg">
+                <Ionicons name="logo-google" size={20} color="#FFFFFF" />
+                <TextSemibold className="text-white ml-3 text-base">
                   Continue with Google
-                </Text>
+                </TextSemibold>
               </>
             )}
           </Pressable>
@@ -175,44 +197,18 @@ export default function AuthScreen() {
           {Platform.OS === "ios" && (
             <Pressable
               onPress={handleAppleSignIn}
-              disabled={loading}
-              className={`bg-white rounded-xl p-4 flex-row items-center justify-center mb-3 ${
-                loading ? "opacity-50" : "active:bg-gray-100"
+              disabled={loading || !animationComplete}
+              className={`bg-dark-card border border-dark-border rounded-xl p-4 flex-row items-center justify-center ${
+                loading ? "opacity-50" : "active:bg-dark-elevated"
               }`}
             >
-              <Ionicons name="logo-apple" size={22} color="#000000" />
-              <Text className="text-gray-800 font-semibold ml-3 text-lg">
+              <Ionicons name="logo-apple" size={22} color="#FFFFFF" />
+              <TextSemibold className="text-white ml-3 text-base">
                 Continue with Apple
-              </Text>
+              </TextSemibold>
             </Pressable>
           )}
-
-          {/* Divider */}
-          <View className="flex-row items-center my-4">
-            <View className="flex-1 h-px bg-dark-border" />
-            <Text className="text-gray-500 mx-4">or</Text>
-            <View className="flex-1 h-px bg-dark-border" />
-          </View>
-
-          {/* Guest Play */}
-          <Pressable
-            onPress={handleGuestPlay}
-            disabled={loading}
-            className={`bg-dark-card border border-dark-border rounded-xl p-4 flex-row items-center justify-center ${
-              loading ? "opacity-50" : "active:bg-dark-border"
-            }`}
-          >
-            <Ionicons name="person-outline" size={20} color="#6B7280" />
-            <Text className="text-gray-400 font-semibold ml-3 text-lg">
-              Play as Guest
-            </Text>
-          </Pressable>
-        </View>
-
-        {/* Terms */}
-        <Text className="text-gray-500 text-xs text-center mt-8 px-4">
-          By continuing, you agree to our Terms of Service and Privacy Policy
-        </Text>
+        </Animated.View>
       </View>
     </SafeAreaView>
   );
