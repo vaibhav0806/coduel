@@ -206,12 +206,10 @@ export async function joinMatchQueue(
   // Remove any existing queue entry
   await supabase.from("match_queue").delete().eq("user_id", userId);
 
-  // Search for an opponent within ±200 rating
+  // Search for any opponent in queue
   const { data: opponents, error: searchErr } = await supabase
     .from("match_queue")
     .select("*")
-    .gte("rating", profile.rating - 200)
-    .lte("rating", profile.rating + 200)
     .neq("user_id", userId)
     .order("joined_at", { ascending: true })
     .limit(1);
@@ -391,12 +389,10 @@ export async function tryMatchFromQueue(
     return null;
   }
 
-  // Search for opponents within ±200 rating
+  // Search for any opponent in queue
   const { data: opponents, error: searchErr } = await supabase
     .from("match_queue")
     .select("*")
-    .gte("rating", myEntry.rating - 200)
-    .lte("rating", myEntry.rating + 200)
     .neq("user_id", userId)
     .order("joined_at", { ascending: true })
     .limit(1);
