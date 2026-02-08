@@ -207,7 +207,7 @@ export async function joinMatchQueue(
   await supabase.from("match_queue").delete().eq("user_id", userId);
 
   // Search for an opponent within ±200 rating
-  const { data: opponents } = await supabase
+  const { data: opponents, error: searchErr } = await supabase
     .from("match_queue")
     .select("*")
     .gte("rating", profile.rating - 200)
@@ -215,6 +215,8 @@ export async function joinMatchQueue(
     .neq("user_id", userId)
     .order("joined_at", { ascending: true })
     .limit(1);
+
+  console.log("[Matchmaking] Queue search: found", opponents?.length ?? 0, "opponents", searchErr ? `(error: ${searchErr.message})` : "");
 
   if (opponents && opponents.length > 0) {
     const opp = opponents[0];
@@ -338,10 +340,13 @@ export async function tryMatchFromQueue(
     .eq("user_id", userId)
     .maybeSingle();
 
-  if (!myEntry) return null; // No longer in queue (someone matched us or we left)
+  if (!myEntry) {
+    console.log("[Matchmaking] Poll: not in queue anymore (matched by someone else?)");
+    return null;
+  }
 
   // Search for opponents within ±200 rating
-  const { data: opponents } = await supabase
+  const { data: opponents, error: searchErr } = await supabase
     .from("match_queue")
     .select("*")
     .gte("rating", myEntry.rating - 200)
@@ -349,6 +354,8 @@ export async function tryMatchFromQueue(
     .neq("user_id", userId)
     .order("joined_at", { ascending: true })
     .limit(1);
+
+  console.log("[Matchmaking] Poll: found", opponents?.length ?? 0, "opponents", searchErr ? `(error: ${searchErr.message})` : "");
 
   if (!opponents || opponents.length === 0) return null;
 
