@@ -341,7 +341,53 @@ export async function tryMatchFromQueue(
     .maybeSingle();
 
   if (!myEntry) {
-    console.log("[Matchmaking] Poll: not in queue anymore (matched by someone else?)");
+    // We were removed from queue — someone else matched us!
+    // Check for a recent human match we've been pulled into
+    console.log("[Matchmaking] Poll: not in queue — checking for pending match...");
+    const recentCutoff = new Date(Date.now() - 30000).toISOString();
+    const { data: recentMatches } = await supabase
+      .from("matches")
+      .select("id, player1_id, player2_id")
+      .or(`player1_id.eq.${userId},player2_id.eq.${userId}`)
+      .eq("is_bot_match", false)
+      .eq("player1_score", 0)
+      .eq("player2_score", 0)
+      .gte("started_at", recentCutoff)
+      .order("started_at", { ascending: false })
+      .limit(1);
+
+    if (recentMatches && recentMatches.length > 0) {
+      const match = recentMatches[0];
+      const opponentId =
+        match.player1_id === userId ? match.player2_id : match.player1_id;
+
+      if (!opponentId) {
+        console.log("[Matchmaking] Poll: match has no opponent ID");
+        return null;
+      }
+
+      const { data: oppProfile } = await supabase
+        .from("profiles")
+        .select("username, rating")
+        .eq("id", opponentId)
+        .single();
+
+      console.log(
+        "[Matchmaking] Poll: found pending match",
+        match.id,
+        "vs",
+        oppProfile?.username
+      );
+
+      return {
+        status: "matched" as const,
+        match_id: match.id,
+        opponent_username: oppProfile?.username ?? "Opponent",
+        opponent_rating: oppProfile?.rating ?? 0,
+      };
+    }
+
+    console.log("[Matchmaking] Poll: no pending match found");
     return null;
   }
 
