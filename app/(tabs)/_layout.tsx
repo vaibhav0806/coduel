@@ -39,6 +39,20 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
+        name="topics"
+        options={{
+          title: "Topics",
+          headerShown: false,
+          tabBarIcon: ({ focused }) => (
+            <Ionicons
+              name={focused ? "library" : "library-outline"}
+              size={22}
+              color={focused ? "#39FF14" : "#3A3A44"}
+            />
+          ),
+        }}
+      />
+      <Tabs.Screen
         name="leaderboard"
         options={{
           title: "Ranks",

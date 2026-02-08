@@ -52,7 +52,8 @@ function shuffleAndPick<T>(arr: T[], count: number): T[] {
 async function selectQuestions(
   userId: string,
   difficulty: number,
-  language: string | null = null
+  language: string | null = null,
+  topic: string | null = null
 ) {
   // Get IDs of questions this user has already seen
   const { data: seen } = await supabase
@@ -70,6 +71,7 @@ async function selectQuestions(
       .lte("difficulty", maxD)
       .limit(limit);
     if (language) q = q.ilike("language", language);
+    if (topic) q = q.eq("topic", topic);
     if (excludeIds.length > 0) {
       q = q.not("id", "in", `(${excludeIds.join(",")})`);
     }
@@ -111,7 +113,8 @@ async function selectQuestions(
 export async function createBotMatch(
   userId: string,
   isRanked: boolean,
-  language: string | null = null
+  language: string | null = null,
+  topic: string | null = null
 ) {
   console.log("[Matchmaking] Creating bot match via direct DB...");
 
@@ -128,8 +131,8 @@ export async function createBotMatch(
   const botName = generateBotName();
   const botRating = generateBotRating(profile.rating);
 
-  // Select questions (with optional language filter)
-  const questions = await selectQuestions(userId, difficulty, language);
+  // Select questions (with optional language and topic filters)
+  const questions = await selectQuestions(userId, difficulty, language, topic);
   console.log("[Matchmaking] Selected questions:", JSON.stringify(questions));
   if (questions.length === 0) throw new Error("No questions available");
 
@@ -193,7 +196,8 @@ type MatchQueueResult =
 export async function joinMatchQueue(
   userId: string,
   isRanked: boolean,
-  language: string | null = null
+  language: string | null = null,
+  topic: string | null = null
 ): Promise<MatchQueueResult> {
   console.log("[Matchmaking] Joining queue via direct DB...");
 
@@ -233,7 +237,7 @@ export async function joinMatchQueue(
       console.log("[Matchmaking] Matched with human:", opp.user_id);
 
       const difficulty = getDifficultyForRating(profile.rating);
-      const questions = await selectQuestions(userId, difficulty, language);
+      const questions = await selectQuestions(userId, difficulty, language, topic);
       if (questions.length === 0) throw new Error("No questions available");
 
       // Create match
@@ -331,7 +335,8 @@ export async function leaveMatchQueue(userId: string) {
 export async function tryMatchFromQueue(
   userId: string,
   isRanked: boolean,
-  language: string | null = null
+  language: string | null = null,
+  topic: string | null = null
 ): Promise<{ status: "matched"; match_id: string; opponent_username: string; opponent_rating: number } | null> {
   // Check if we're still in the queue
   const { data: myEntry } = await supabase
@@ -428,7 +433,7 @@ export async function tryMatchFromQueue(
   if (!profile) return null;
 
   const difficulty = getDifficultyForRating(profile.rating);
-  const questions = await selectQuestions(userId, difficulty, language);
+  const questions = await selectQuestions(userId, difficulty, language, topic);
   if (questions.length === 0) return null;
 
   // Create match

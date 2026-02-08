@@ -75,6 +75,7 @@ export interface Database {
           language: string;
           difficulty: number;
           category: string | null;
+          topic: string | null;
           code_snippet: string;
           question_text: string;
           options: string[];
@@ -87,6 +88,7 @@ export interface Database {
           language?: string;
           difficulty: number;
           category?: string | null;
+          topic?: string | null;
           code_snippet: string;
           question_text?: string;
           options: string[];
@@ -99,6 +101,7 @@ export interface Database {
           language?: string;
           difficulty?: number;
           category?: string | null;
+          topic?: string | null;
           code_snippet?: string;
           question_text?: string;
           options?: string[];
