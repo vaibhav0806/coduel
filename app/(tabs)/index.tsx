@@ -5,7 +5,6 @@ import {
   Modal,
   RefreshControl,
   Text as RNText,
-  useWindowDimensions,
 } from "react-native";
 import { Text, TextBold, TextSemibold, TextMedium } from "@/components/ui/Text";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -23,6 +22,7 @@ import Animated, {
   withSpring,
   withDelay,
   interpolate,
+  cancelAnimation,
   Easing,
   FadeInDown,
   FadeIn,
@@ -58,7 +58,6 @@ interface RecentMatch {
 export default function HomeScreen() {
   const { user, profile, refreshProfile } = useAuth();
   const { milestones, checkMilestones, clearMilestones } = useMilestones();
-  const { width: screenWidth } = useWindowDimensions();
   const [isMatchmaking, setIsMatchmaking] = useState(false);
   const [matchmakingText, setMatchmakingText] = useState("Finding opponent...");
   const [leagueData, setLeagueData] = useState<{
@@ -215,21 +214,22 @@ export default function HomeScreen() {
       ),
       -1,
     );
-    // Shimmer sweep with pause between - use screen width to ensure full sweep
+    // Shimmer sweep - travels across button then pauses before repeating
+    // Use 500px which covers all phone widths (typically 350-430px)
     shimmerX.value = withRepeat(
       withSequence(
-        withDelay(
-          3500,
-          withTiming(screenWidth, {
-            duration: 1000,
-            easing: Easing.inOut(Easing.ease),
-          }),
-        ),
-        withTiming(-100, { duration: 0 }),
+        withTiming(500, { duration: 1200, easing: Easing.inOut(Easing.ease) }),
+        withTiming(-100, { duration: 0 }), // Reset position instantly
+        withDelay(3000, withTiming(-100, { duration: 0 })), // Pause before next sweep
       ),
       -1,
     );
-  }, [screenWidth]);
+
+    return () => {
+      cancelAnimation(glowPulse);
+      cancelAnimation(shimmerX);
+    };
+  }, []);
 
   // Refresh profile and league data when screen comes into focus
   useFocusEffect(
