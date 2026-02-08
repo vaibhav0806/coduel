@@ -1,4 +1,4 @@
-import { View, Text as RNText, Pressable, Modal } from "react-native";
+import { View, Text as RNText, Pressable, Modal, ScrollView } from "react-native";
 import { Text, TextBold, TextSemibold, TextMedium } from "@/components/ui/Text";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, router } from "expo-router";
@@ -513,7 +513,11 @@ export default function BattleScreen() {
       </View>
 
       {/* Question */}
-      <View className="flex-1 px-6 pt-6">
+      <ScrollView
+        className="flex-1"
+        contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 24, paddingBottom: 16 }}
+        showsVerticalScrollIndicator={false}
+      >
         {/* Code Snippet */}
         {battle.question && (
           <>
@@ -625,7 +629,7 @@ export default function BattleScreen() {
             </Pressable>
           </View>
         )}
-      </View>
+      </ScrollView>
 
       {/* Reactions Bar */}
       {battle.phase === "question" && (
