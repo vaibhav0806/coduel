@@ -137,6 +137,12 @@ function RootLayoutNav() {
               options={{
                 presentation: "modal",
                 title: "Settings",
+                headerStyle: { backgroundColor: "#0A0A0F" },
+                headerTintColor: "#FFFFFF",
+                headerTitleStyle: {
+                  fontFamily: "Outfit_600SemiBold",
+                  fontSize: 17,
+                },
               }}
             />
           </Stack>

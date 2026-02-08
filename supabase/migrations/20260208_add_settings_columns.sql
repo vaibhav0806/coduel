@@ -1,0 +1,3 @@
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS display_name TEXT;
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS country TEXT;
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS preferred_language TEXT;

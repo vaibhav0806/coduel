@@ -37,6 +37,7 @@ import {
   createBotMatch,
   leaveMatchQueue,
   createMatchmakingChannel,
+  tryMatchFromQueue,
 } from "@/lib/supabase";
 import { RealtimeChannel } from "@supabase/supabase-js";
 import { Match } from "@/types/database";
@@ -63,12 +64,15 @@ export default function HomeScreen() {
     position: number;
     topPlayers: { username: string; points: number; isMe: boolean }[];
   } | null>(null);
-  const [selectedLanguage, setSelectedLanguage] = useState<string | null>(null);
+  const [selectedLanguage, setSelectedLanguage] = useState<string | null>(
+    profile?.preferred_language ?? null
+  );
   const [recentMatches, setRecentMatches] = useState<RecentMatch[]>([]);
   const [displayRating, setDisplayRating] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
   const channelRef = useRef<RealtimeChannel | null>(null);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const hasAnimated = useRef(false);
 
   const buttonScale = useSharedValue(1);
@@ -148,6 +152,13 @@ export default function HomeScreen() {
   };
 
   const motivation = getMotivationMessage();
+
+  // Sync preferred language from profile
+  useEffect(() => {
+    if (profile && profile.preferred_language !== undefined) {
+      setSelectedLanguage(profile.preferred_language);
+    }
+  }, [profile?.preferred_language]);
 
   useEffect(() => {
     if (rating === 0 || hasAnimated.current) {
@@ -359,18 +370,24 @@ export default function HomeScreen() {
     setRecentMatches(items);
   };
 
+  const cleanupMatchmaking = () => {
+    if (channelRef.current) {
+      channelRef.current.unsubscribe();
+      channelRef.current = null;
+    }
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+      timeoutRef.current = null;
+    }
+    if (pollRef.current) {
+      clearInterval(pollRef.current);
+      pollRef.current = null;
+    }
+  };
+
   // Cleanup on unmount
   useEffect(() => {
-    return () => {
-      if (channelRef.current) {
-        channelRef.current.unsubscribe();
-        channelRef.current = null;
-      }
-      if (timeoutRef.current) {
-        clearTimeout(timeoutRef.current);
-        timeoutRef.current = null;
-      }
-    };
+    return () => cleanupMatchmaking();
   }, []);
 
   const navigateToBattle = (
@@ -400,18 +417,33 @@ export default function HomeScreen() {
 
     let navigated = false;
 
-    // Start creating bot match immediately in the background
+    // 1. Subscribe to broadcast channel FIRST (before joining queue)
+    //    Prevents missing match_found if opponent finds us during joinMatchQueue
+    const channel = createMatchmakingChannel(user.id);
+    channelRef.current = channel;
+
+    channel
+      .on("broadcast", { event: "match_found" }, ({ payload }) => {
+        if (navigated) return;
+        navigated = true;
+        cleanupMatchmaking();
+        navigateToBattle(
+          payload.match_id,
+          payload.opponent_username,
+          payload.opponent_rating,
+          false,
+        );
+      })
+      .subscribe();
+
+    // 2. Start creating bot match in the background
     const botMatchPromise = createBotMatch(user.id, true, selectedLanguage);
 
-    // After 3s, use the pre-created bot match
+    // 3. Bot fallback after 10s
     timeoutRef.current = setTimeout(async () => {
       if (navigated) return;
       navigated = true;
-
-      if (channelRef.current) {
-        channelRef.current.unsubscribe();
-        channelRef.current = null;
-      }
+      cleanupMatchmaking();
 
       try {
         const result = await botMatchPromise;
@@ -427,15 +459,13 @@ export default function HomeScreen() {
       }
     }, 10000);
 
+    // 4. Join the match queue
     try {
       const result = await joinMatchQueue(user.id, true, selectedLanguage);
 
       if (result.status === "matched") {
         navigated = true;
-        if (timeoutRef.current) {
-          clearTimeout(timeoutRef.current);
-          timeoutRef.current = null;
-        }
+        cleanupMatchmaking();
         navigateToBattle(
           result.match_id,
           result.opponent_username,
@@ -445,43 +475,44 @@ export default function HomeScreen() {
         return;
       }
 
-      const channel = createMatchmakingChannel(user.id);
-      channelRef.current = channel;
-
-      channel
-        .on("broadcast", { event: "match_found" }, ({ payload }) => {
-          if (navigated) return;
-          navigated = true;
-
-          if (timeoutRef.current) {
-            clearTimeout(timeoutRef.current);
-            timeoutRef.current = null;
+      // 5. Start polling every 2s for opponents who joined after us
+      //    Handles the race where both players insert simultaneously
+      pollRef.current = setInterval(async () => {
+        if (navigated) {
+          if (pollRef.current) {
+            clearInterval(pollRef.current);
+            pollRef.current = null;
           }
-          channel.unsubscribe();
-          channelRef.current = null;
+          return;
+        }
 
-          navigateToBattle(
-            payload.match_id,
-            payload.opponent_username,
-            payload.opponent_rating,
-            false,
+        try {
+          const match = await tryMatchFromQueue(
+            user.id,
+            true,
+            selectedLanguage,
           );
-        })
-        .subscribe();
+          if (match && !navigated) {
+            navigated = true;
+            cleanupMatchmaking();
+            navigateToBattle(
+              match.match_id,
+              match.opponent_username,
+              match.opponent_rating,
+              false,
+            );
+          }
+        } catch (err) {
+          console.error("[Matchmaking] Poll error:", err);
+        }
+      }, 2000);
     } catch (err) {
       console.error("[Matchmaking] Queue failed:", err);
     }
   };
 
   const handleCancelMatchmaking = () => {
-    if (channelRef.current) {
-      channelRef.current.unsubscribe();
-      channelRef.current = null;
-    }
-    if (timeoutRef.current) {
-      clearTimeout(timeoutRef.current);
-      timeoutRef.current = null;
-    }
+    cleanupMatchmaking();
     setIsMatchmaking(false);
 
     if (user) {

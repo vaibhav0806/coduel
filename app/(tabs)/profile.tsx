@@ -1,4 +1,4 @@
-import { View, Pressable, ScrollView, Alert, RefreshControl } from "react-native";
+import { View, Pressable, ScrollView, RefreshControl } from "react-native";
 import { Text, TextBold, TextSemibold, TextMedium } from "@/components/ui/Text";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -162,7 +162,7 @@ function ProfileSkeleton() {
 }
 
 export default function ProfileScreen() {
-  const { user, profile, signOut, refreshProfile } = useAuth();
+  const { user, profile, refreshProfile } = useAuth();
   const [matchHistory, setMatchHistory] = useState<MatchHistoryItem[]>([]);
   const [globalRank, setGlobalRank] = useState<number | null>(null);
   const [loadingHistory, setLoadingHistory] = useState(true);
@@ -265,20 +265,6 @@ export default function ProfileScreen() {
     } finally {
       setLoadingHistory(false);
     }
-  };
-
-  const handleSignOut = () => {
-    Alert.alert("Sign Out", "Are you sure you want to sign out?", [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Sign Out",
-        style: "destructive",
-        onPress: async () => {
-          await signOut();
-          router.replace("/auth");
-        },
-      },
-    ]);
   };
 
   if (!profile) {
@@ -711,21 +697,6 @@ export default function ProfileScreen() {
           </View>
         </Animated.View>
 
-        {/* Section 7: Sign Out (Muted) */}
-        <Animated.View
-          entering={FadeInDown.delay(500).duration(300)}
-          className="mx-6 mt-8 mb-4"
-        >
-          <Pressable
-            onPress={handleSignOut}
-            className="flex-row items-center justify-center py-3"
-          >
-            <Ionicons name="log-out-outline" size={16} color="#4B5563" />
-            <TextMedium style={{ fontSize: 14, color: "#4B5563", marginLeft: 6 }}>
-              Sign Out
-            </TextMedium>
-          </Pressable>
-        </Animated.View>
       </ScrollView>
     </SafeAreaView>
   );

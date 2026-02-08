@@ -24,6 +24,9 @@ export interface Database {
           push_token: string | null;
           xp: number;
           level: number;
+          display_name: string | null;
+          country: string | null;
+          preferred_language: string | null;
           created_at: string;
         };
         Insert: {
@@ -40,6 +43,9 @@ export interface Database {
           push_token?: string | null;
           xp?: number;
           level?: number;
+          display_name?: string | null;
+          country?: string | null;
+          preferred_language?: string | null;
           created_at?: string;
         };
         Update: {
@@ -56,6 +62,9 @@ export interface Database {
           push_token?: string | null;
           xp?: number;
           level?: number;
+          display_name?: string | null;
+          country?: string | null;
+          preferred_language?: string | null;
           created_at?: string;
         };
         Relationships: [];

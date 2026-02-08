@@ -206,12 +206,12 @@ export async function joinMatchQueue(
   // Remove any existing queue entry
   await supabase.from("match_queue").delete().eq("user_id", userId);
 
-  // Search for an opponent within ±100 rating
+  // Search for an opponent within ±200 rating
   const { data: opponents } = await supabase
     .from("match_queue")
     .select("*")
-    .gte("rating", profile.rating - 100)
-    .lte("rating", profile.rating + 100)
+    .gte("rating", profile.rating - 200)
+    .lte("rating", profile.rating + 200)
     .neq("user_id", userId)
     .order("joined_at", { ascending: true })
     .limit(1);
@@ -322,6 +322,131 @@ export async function joinMatchQueue(
 export async function leaveMatchQueue(userId: string) {
   await supabase.from("match_queue").delete().eq("user_id", userId);
   return { status: "left_queue" as const };
+}
+
+// Poll-based re-check for opponents already in queue.
+// Handles the race where both players join simultaneously and miss each other.
+export async function tryMatchFromQueue(
+  userId: string,
+  isRanked: boolean,
+  language: string | null = null
+): Promise<{ status: "matched"; match_id: string; opponent_username: string; opponent_rating: number } | null> {
+  // Check if we're still in the queue
+  const { data: myEntry } = await supabase
+    .from("match_queue")
+    .select("*")
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (!myEntry) return null; // No longer in queue (someone matched us or we left)
+
+  // Search for opponents within ±200 rating
+  const { data: opponents } = await supabase
+    .from("match_queue")
+    .select("*")
+    .gte("rating", myEntry.rating - 200)
+    .lte("rating", myEntry.rating + 200)
+    .neq("user_id", userId)
+    .order("joined_at", { ascending: true })
+    .limit(1);
+
+  if (!opponents || opponents.length === 0) return null;
+
+  const opp = opponents[0];
+
+  // Atomically remove opponent from queue (prevents double-match)
+  const { data: deleted } = await supabase
+    .from("match_queue")
+    .delete()
+    .eq("id", opp.id)
+    .select("id");
+
+  if (!deleted || deleted.length === 0) return null; // Someone else got them
+
+  // Remove self from queue
+  await supabase.from("match_queue").delete().eq("user_id", userId);
+
+  console.log("[Matchmaking] Poll matched with human:", opp.user_id);
+
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("rating, username")
+    .eq("id", userId)
+    .single();
+
+  if (!profile) return null;
+
+  const difficulty = getDifficultyForRating(profile.rating);
+  const questions = await selectQuestions(userId, difficulty, language);
+  if (questions.length === 0) return null;
+
+  // Create match
+  const { data: match, error: matchErr } = await supabase
+    .from("matches")
+    .insert({
+      player1_id: userId,
+      player2_id: opp.user_id,
+      is_bot_match: false,
+      player1_score: 0,
+      player2_score: 0,
+      is_ranked: isRanked,
+      started_at: new Date().toISOString(),
+      ended_at: new Date().toISOString(),
+    })
+    .select("id")
+    .single();
+
+  if (matchErr || !match) return null;
+
+  // Create rounds
+  const rounds = questions.map((q, i) => ({
+    match_id: match.id,
+    round_number: i + 1,
+    question_id: q.id,
+  }));
+  const { error: roundsErr } = await supabase
+    .from("match_rounds")
+    .insert(rounds);
+  if (roundsErr) return null;
+
+  // Record question history
+  const history = questions.flatMap((q) => [
+    { user_id: userId, question_id: q.id },
+    { user_id: opp.user_id, question_id: q.id },
+  ]);
+  await supabase
+    .from("user_question_history")
+    .upsert(history, { onConflict: "user_id,question_id" })
+    .then(({ error }) => {
+      if (error) console.warn("[Matchmaking] History upsert warning:", error);
+    });
+
+  // Get opponent profile
+  const { data: oppProfile } = await supabase
+    .from("profiles")
+    .select("username, rating")
+    .eq("id", opp.user_id)
+    .single();
+
+  // Broadcast match_found to the opponent so their listener picks it up
+  const channel = supabase.channel(`matchmaking:${opp.user_id}`);
+  await channel.send({
+    type: "broadcast",
+    event: "match_found",
+    payload: {
+      match_id: match.id,
+      opponent_username: profile.username ?? "Opponent",
+      opponent_rating: profile.rating,
+    },
+  });
+  supabase.removeChannel(channel);
+
+  return {
+    status: "matched" as const,
+    match_id: match.id,
+    opponent_username: oppProfile?.username ?? "Opponent",
+    opponent_rating: oppProfile?.rating ?? opp.rating,
+  };
 }
 
 // --- Battle (direct DB queries) ---
