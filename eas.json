@@ -1,0 +1,27 @@
+{
+  "cli": {
+    "version": ">= 16.32.0",
+    "appVersionSource": "remote"
+  },
+  "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal"
+    },
+    "preview": {
+      "distribution": "internal",
+      "env": {
+        "EXPO_PUBLIC_SUPABASE_URL": "https://xvwstjlhmfxeudyteftc.supabase.co",
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "sb_publishable_uig56vu62VzbAjSojiUIPg_-H_RC-ql",
+        "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "534872056098-4060eselcmppbao9c78vubnp0ck23ut9.apps.googleusercontent.com",
+        "EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID": "534872056098-5hlcmld9q5l29koh9sf4uj3chfbedjol.apps.googleusercontent.com"
+      }
+    },
+    "production": {
+      "autoIncrement": true
+    }
+  },
+  "submit": {
+    "production": {}
+  }
+}

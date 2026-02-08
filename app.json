@@ -48,8 +48,10 @@
     },
     "extra": {
       "eas": {
-        "projectId": "your-project-id"
-      }
-    }
+        "projectId": "9a940e8e-9740-4f89-b496-f71065a32234"
+      },
+      "router": {}
+    },
+    "owner": "vaibhav0806"
   }
 }

@@ -6,6 +6,7 @@ import {
   submitBattleAnswer,
   fetchRoundResult,
   checkBothAnswered,
+  awardLeaguePoints,
 } from "@/lib/supabase";
 import {
   calculateRatingChange,
@@ -14,7 +15,6 @@ import {
 } from "@/lib/rating";
 import { RealtimeChannel } from "@supabase/supabase-js";
 import { calculateStreakUpdate } from "@/lib/streak";
-import { getWeekStart, LEAGUE_POINTS } from "@/lib/league";
 import { calculateMatchXP, getLevelFromXP } from "@/lib/xp";
 
 export type BattlePhase =
@@ -65,6 +65,7 @@ interface MatchResult {
   new_rating: number;
   new_level: number;
   leveled_up: boolean;
+  promoted_to: "silver" | "gold" | "diamond" | null;
 }
 
 interface UseBattleProps {
@@ -157,7 +158,7 @@ export function useBattle({
   const [question, setQuestion] = useState<BattleQuestion | null>(null);
   const [player, setPlayer] = useState<BattlePlayer | null>(null);
   const [opponent, setOpponent] = useState<BattlePlayer | null>(null);
-  const [timeRemaining, setTimeRemaining] = useState(20);
+  const [timeRemaining, setTimeRemaining] = useState(15);
   const [selectedAnswer, setSelectedAnswer] = useState<number | null>(null);
   const [opponentAnswered, setOpponentAnswered] = useState(false);
   const [roundWinner, setRoundWinner] = useState<string | null>(null);
@@ -230,9 +231,9 @@ export function useBattle({
       // Check if match is over
       const pScore = result.player_score;
       const oScore = result.opponent_score;
-      if (pScore >= 2 || oScore >= 2 || result.round_number >= 3) {
+      if (result.round_number >= 5) {
         const isComeback =
-          (pScore === 2 && oScore === 1) || (oScore === 2 && pScore === 1);
+          (pScore === 3 && oScore === 2) || (oScore === 3 && pScore === 2);
         const matchWinner =
           pScore > oScore ? "player" : oScore > pScore ? "opponent" : "tie";
 
@@ -283,28 +284,46 @@ export function useBattle({
           new_rating: newRating,
           new_level: xpUpdate.newLevel,
           leveled_up: xpUpdate.leveledUp,
+          promoted_to: xpUpdate.promotedTo,
         });
 
         // Only player1 updates the match record (to avoid double-writes)
         if (isPlayer1Ref.current) {
+          // For bot wins, winner_id must be null (not "bot" — it's a UUID column)
+          const opponentId = opponentRef.current?.id;
           const winnerId =
             matchWinner === "player"
               ? userId
               : matchWinner === "opponent"
-              ? opponentRef.current?.id ?? null
+              ? (opponentId && opponentId !== "bot" ? opponentId : null)
               : null;
 
-          supabase
-            .from("matches")
-            .update({
-              player1_score: isPlayer1Ref.current ? pScore : oScore,
-              player2_score: isPlayer1Ref.current ? oScore : pScore,
-              winner_id: winnerId,
-              player1_rating_change: isPlayer1Ref.current ? ratingChange : -ratingChange,
-              ended_at: new Date().toISOString(),
-            })
-            .eq("id", matchId)
-            .then(() => {});
+          // Fire-and-forget: update match record then award league points
+          (async () => {
+            try {
+              const { error: updateErr } = await supabase
+                .from("matches")
+                .update({
+                  player1_score: isPlayer1Ref.current ? pScore : oScore,
+                  player2_score: isPlayer1Ref.current ? oScore : pScore,
+                  winner_id: winnerId,
+                  player1_rating_change: isPlayer1Ref.current ? ratingChange : -ratingChange,
+                  ended_at: new Date().toISOString(),
+                })
+                .eq("id", matchId);
+
+              if (updateErr) {
+                console.warn("[Battle] Match update error:", updateErr);
+              }
+
+              // Award league points (direct DB upsert)
+              if (isRankedRef.current) {
+                await awardLeaguePoints(userId, isWin);
+              }
+            } catch (err) {
+              console.warn("[Battle] Match finalize error:", err);
+            }
+          })();
         }
       }
     },
@@ -344,9 +363,9 @@ export function useBattle({
         q.correct_answer,
         q.explanation ?? "",
         playerAnswer ?? -1,
-        playerTimeMs ?? 20000,
+        playerTimeMs ?? 15000,
         opponentAnswer ?? -1,
-        opponentTimeMs ?? 20000,
+        opponentTimeMs ?? 15000,
         playerScoreRef.current,
         opponentScoreRef.current
       );
@@ -462,7 +481,7 @@ export function useBattle({
 
     if (countdown <= 0) {
       setPhase("question");
-      setTimeRemaining(20);
+      setTimeRemaining(15);
       startTimeRef.current = Date.now();
       submittedRef.current = false;
       opponentAnsweredRef.current = false;
@@ -613,7 +632,7 @@ export function useBattle({
 
     const pScore = playerScoreRef.current;
     const oScore = opponentScoreRef.current;
-    if (pScore >= 2 || oScore >= 2 || currentRound >= 3) {
+    if (currentRound >= 5) {
       setPhase("match_end");
       return;
     }
@@ -640,7 +659,7 @@ export function useBattle({
   return {
     phase,
     currentRound,
-    totalRounds: 3,
+    totalRounds: 5,
     question,
     player,
     opponent,
@@ -667,18 +686,26 @@ async function updateProfileAfterMatch(
   isWin: boolean,
   isRanked: boolean,
   xpEarned: number
-): Promise<{ newLevel: number; leveledUp: boolean }> {
+): Promise<{ newLevel: number; leveledUp: boolean; promotedTo: "silver" | "gold" | "diamond" | null }> {
   const newRating = applyFloorProtection(
     currentRating,
     currentRating + ratingChange
   );
+  const oldTier = getTierForRating(currentRating);
   const newTier = getTierForRating(newRating);
+  const tierOrder = ["bronze", "silver", "gold", "diamond"] as const;
+  const promoted = isRanked && tierOrder.indexOf(newTier) > tierOrder.indexOf(oldTier);
+  const promotedTo = promoted ? (newTier as "silver" | "gold" | "diamond") : null;
 
-  const { data: current } = await supabase
+  const { data: current, error: selectErr } = await supabase
     .from("profiles")
     .select("wins, losses, current_streak, best_streak, last_battle_date, streak_freezes, xp, level")
     .eq("id", userId)
     .single();
+
+  if (selectErr) {
+    console.error("[Battle] Failed to fetch profile for update:", selectErr);
+  }
 
   const streakUpdate = calculateStreakUpdate({
     current_streak: current?.current_streak ?? 0,
@@ -709,38 +736,16 @@ async function updateProfileAfterMatch(
     updateData.losses = (current?.losses ?? 0) + (isWin ? 0 : 1);
   }
 
-  await supabase
+  const { error: updateErr } = await supabase
     .from("profiles")
     .update(updateData)
     .eq("id", userId);
 
-  // Award league points for ranked matches
-  if (isRanked) {
-    const weekStart = getWeekStart();
-    const pointsToAdd = isWin ? LEAGUE_POINTS.win : LEAGUE_POINTS.loss;
-
-    const { data: existing } = await supabase
-      .from("league_memberships")
-      .select("id, points")
-      .eq("user_id", userId)
-      .eq("week_start", weekStart)
-      .single();
-
-    if (existing) {
-      await supabase
-        .from("league_memberships")
-        .update({ points: existing.points + pointsToAdd, league_tier: newTier })
-        .eq("id", existing.id);
-    } else {
-      await supabase.from("league_memberships").insert({
-        user_id: userId,
-        league_tier: newTier,
-        league_group: 1,
-        week_start: weekStart,
-        points: pointsToAdd,
-      });
-    }
+  if (updateErr) {
+    console.error("[Battle] Failed to update profile:", updateErr);
   }
 
-  return { newLevel: levelInfo.level, leveledUp };
+  // League points are awarded via edge function call in applyRoundResult
+
+  return { newLevel: levelInfo.level, leveledUp, promotedTo };
 }

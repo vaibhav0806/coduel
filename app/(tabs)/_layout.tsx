@@ -45,6 +45,7 @@ export default function TabLayout() {
         name="leaderboard"
         options={{
           title: "Ranks",
+          headerShown: false,
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="trophy" size={size} color={color} />
           ),
@@ -54,6 +55,7 @@ export default function TabLayout() {
         name="profile"
         options={{
           title: "Profile",
+          headerShown: false,
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="person" size={size} color={color} />
           ),

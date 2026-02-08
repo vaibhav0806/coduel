@@ -30,9 +30,10 @@ export const LANGUAGES: Language[] = [
 interface LanguageSelectorProps {
   selectedLanguage: string | null;
   onSelect: (language: string | null) => void;
+  compact?: boolean;
 }
 
-export function LanguageSelector({ selectedLanguage, onSelect }: LanguageSelectorProps) {
+export function LanguageSelector({ selectedLanguage, onSelect, compact }: LanguageSelectorProps) {
   const [modalVisible, setModalVisible] = useState(false);
   const scale = useSharedValue(1);
 
@@ -57,26 +58,37 @@ export function LanguageSelector({ selectedLanguage, onSelect }: LanguageSelecto
         onPressIn={handlePressIn}
         onPressOut={handlePressOut}
       >
-        <Animated.View
-          style={animatedStyle}
-          className="bg-dark-card border border-dark-border rounded-xl p-4 flex-row items-center justify-between"
-        >
-          <View className="flex-row items-center flex-1">
-            <View className="w-10 h-10 bg-dark-border rounded-full items-center justify-center">
-              <Ionicons name={selectedLang.icon} size={20} color={selectedLang.color} />
+        {compact ? (
+          <Animated.View
+            style={animatedStyle}
+            className="bg-dark-card border border-dark-border rounded-xl p-3 flex-row items-center justify-center"
+          >
+            <Ionicons name={selectedLang.icon} size={16} color={selectedLang.color} />
+            <TextSemibold className="text-white text-sm ml-2">{selectedLang.name}</TextSemibold>
+            <Ionicons name="chevron-down" size={14} color="#6B7280" style={{ marginLeft: 6 }} />
+          </Animated.View>
+        ) : (
+          <Animated.View
+            style={animatedStyle}
+            className="bg-dark-card border border-dark-border rounded-xl p-4 flex-row items-center justify-between"
+          >
+            <View className="flex-row items-center flex-1">
+              <View className="w-10 h-10 bg-dark-border rounded-full items-center justify-center">
+                <Ionicons name={selectedLang.icon} size={20} color={selectedLang.color} />
+              </View>
+              <View className="ml-3 flex-1">
+                <TextSemibold className="text-white">{selectedLang.name}</TextSemibold>
+                <Text className="text-gray-500 text-xs mt-0.5">{selectedLang.description}</Text>
+              </View>
             </View>
-            <View className="ml-3 flex-1">
-              <TextSemibold className="text-white">{selectedLang.name}</TextSemibold>
-              <Text className="text-gray-500 text-xs mt-0.5">{selectedLang.description}</Text>
+            <View className="flex-row items-center">
+              <View className="bg-dark-border px-2 py-1 rounded-full mr-2">
+                <Text className="text-gray-400 text-xs">Topic</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color="#6B7280" />
             </View>
-          </View>
-          <View className="flex-row items-center">
-            <View className="bg-dark-border px-2 py-1 rounded-full mr-2">
-              <Text className="text-gray-400 text-xs">Topic</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={18} color="#6B7280" />
-          </View>
-        </Animated.View>
+          </Animated.View>
+        )}
       </Pressable>
 
       <Modal

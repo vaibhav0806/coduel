@@ -1,18 +1,28 @@
-import { View, Pressable, ScrollView, Alert, ActivityIndicator } from "react-native";
+import { View, Pressable, ScrollView, Alert, RefreshControl } from "react-native";
 import { Text, TextBold, TextSemibold, TextMedium } from "@/components/ui/Text";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { router, useFocusEffect } from "expo-router";
-import { useState, useCallback } from "react";
-import Animated, { FadeIn, FadeInDown } from "react-native-reanimated";
+import { useState, useCallback, useEffect } from "react";
+import { LinearGradient } from "expo-linear-gradient";
+import Animated, {
+  FadeIn,
+  FadeInDown,
+  useSharedValue,
+  useAnimatedStyle,
+  withTiming,
+  Easing,
+} from "react-native-reanimated";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
 import { Match } from "@/types/database";
-import { Logo } from "@/components/AnimatedLogo";
+import { getTierConfig } from "@/lib/rating";
+import { Skeleton, useSkeletonAnimation } from "@/components/ui/Skeleton";
 
 interface MatchHistoryItem {
   id: string;
   opponentName: string;
+  opponentRating: number | null;
   playerScore: number;
   opponentScore: number;
   ratingChange: number | null;
@@ -21,11 +31,144 @@ interface MatchHistoryItem {
   date: string;
 }
 
+function MatchHistorySkeleton() {
+  const shimmer = useSkeletonAnimation();
+
+  return (
+    <View>
+      {[0, 1, 2].map((i) => (
+        <View
+          key={i}
+          className={i < 2 ? "border-b border-dark-border" : ""}
+        >
+          <View className="flex-row items-center p-4">
+            {/* W/L badge */}
+            <Skeleton width={28} height={28} borderRadius={6} shimmerValue={shimmer} />
+            {/* Name + score */}
+            <View className="flex-1 ml-3">
+              <Skeleton width={100 + i * 15} height={14} borderRadius={4} shimmerValue={shimmer} />
+              <Skeleton width={70} height={11} borderRadius={4} shimmerValue={shimmer} style={{ marginTop: 6 }} />
+            </View>
+            {/* Rating change */}
+            <Skeleton width={32} height={14} borderRadius={4} shimmerValue={shimmer} />
+          </View>
+        </View>
+      ))}
+    </View>
+  );
+}
+
+function ProfileSkeleton() {
+  const shimmer = useSkeletonAnimation();
+
+  return (
+    <SafeAreaView className="flex-1 bg-dark" edges={["top"]}>
+      <LinearGradient
+        colors={["#050508", "#080812", "#050508"]}
+        style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }}
+      />
+
+      {/* Header */}
+      <View className="flex-row items-center justify-between px-6 pt-3 pb-2">
+        <Skeleton width={70} height={20} borderRadius={6} shimmerValue={shimmer} />
+        <Skeleton width={20} height={20} borderRadius={10} shimmerValue={shimmer} />
+      </View>
+
+      <ScrollView className="flex-1" contentContainerStyle={{ paddingBottom: 32 }} showsVerticalScrollIndicator={false}>
+        {/* Avatar + Name row */}
+        <View className="flex-row items-center mx-6 mt-5">
+          <Skeleton width={64} height={64} borderRadius={32} shimmerValue={shimmer} />
+          <View className="ml-4 flex-1">
+            <Skeleton width={140} height={20} borderRadius={6} shimmerValue={shimmer} />
+            <View className="flex-row items-center mt-2">
+              <Skeleton width={60} height={12} borderRadius={6} shimmerValue={shimmer} />
+              <Skeleton width={50} height={16} borderRadius={10} shimmerValue={shimmer} style={{ marginLeft: 8 }} />
+            </View>
+          </View>
+        </View>
+
+        {/* Rating card */}
+        <View className="mx-6 mt-5">
+          <View className="bg-dark-card border border-dark-border rounded-xl p-4">
+            <View className="flex-row items-center justify-between">
+              <View>
+                <Skeleton width={120} height={36} borderRadius={6} shimmerValue={shimmer} />
+                <Skeleton width={50} height={10} borderRadius={4} shimmerValue={shimmer} style={{ marginTop: 6 }} />
+              </View>
+              <Skeleton width={60} height={10} borderRadius={4} shimmerValue={shimmer} />
+            </View>
+            {/* Progress bar */}
+            <View className="mt-3">
+              <Skeleton width="100%" height={4} borderRadius={2} shimmerValue={shimmer} />
+            </View>
+          </View>
+        </View>
+
+        {/* Stats card */}
+        <View className="mx-6 mt-5">
+          <View className="bg-dark-card border border-dark-border rounded-xl p-4">
+            <View className="flex-row">
+              {[0, 1, 2, 3].map((i) => (
+                <View key={i} className="flex-1 items-center" style={{ flexDirection: "column" }}>
+                  {i > 0 && (
+                    <View
+                      style={{
+                        position: "absolute",
+                        left: 0,
+                        top: 0,
+                        bottom: 0,
+                        width: 1,
+                        backgroundColor: "rgba(255,255,255,0.06)",
+                      }}
+                    />
+                  )}
+                  <Skeleton width={32} height={10} borderRadius={4} shimmerValue={shimmer} />
+                  <Skeleton width={28} height={18} borderRadius={4} shimmerValue={shimmer} style={{ marginTop: 6 }} />
+                </View>
+              ))}
+            </View>
+          </View>
+        </View>
+
+        {/* Match history header */}
+        <View className="mx-6 mt-6">
+          <View className="flex-row items-center justify-between mb-3">
+            <Skeleton width={110} height={14} borderRadius={4} shimmerValue={shimmer} />
+            <Skeleton width={50} height={12} borderRadius={4} shimmerValue={shimmer} />
+          </View>
+
+          {/* Match rows */}
+          <View className="bg-dark-card border border-dark-border rounded-xl overflow-hidden">
+            {[0, 1, 2].map((i) => (
+              <View
+                key={i}
+                className={i < 2 ? "border-b border-dark-border" : ""}
+              >
+                <View className="flex-row items-center p-4">
+                  <Skeleton width={28} height={28} borderRadius={6} shimmerValue={shimmer} />
+                  <View className="flex-1 ml-3">
+                    <Skeleton width={100 + i * 15} height={14} borderRadius={4} shimmerValue={shimmer} />
+                    <Skeleton width={70} height={11} borderRadius={4} shimmerValue={shimmer} style={{ marginTop: 6 }} />
+                  </View>
+                  <Skeleton width={32} height={14} borderRadius={4} shimmerValue={shimmer} />
+                </View>
+              </View>
+            ))}
+          </View>
+        </View>
+      </ScrollView>
+    </SafeAreaView>
+  );
+}
+
 export default function ProfileScreen() {
   const { user, profile, signOut, refreshProfile } = useAuth();
   const [matchHistory, setMatchHistory] = useState<MatchHistoryItem[]>([]);
   const [globalRank, setGlobalRank] = useState<number | null>(null);
   const [loadingHistory, setLoadingHistory] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const progressWidth = useSharedValue(0);
 
   useFocusEffect(
     useCallback(() => {
@@ -36,6 +179,16 @@ export default function ProfileScreen() {
       }
     }, [user])
   );
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await Promise.all([
+      refreshProfile(),
+      user ? fetchMatchHistory(user.id) : Promise.resolve(),
+      fetchGlobalRank(),
+    ]);
+    setRefreshing(false);
+  }, [user]);
 
   const fetchGlobalRank = async () => {
     if (!profile) return;
@@ -66,14 +219,14 @@ export default function ProfileScreen() {
         .map((m) => (m.player1_id === userId ? m.player2_id : m.player1_id))
         .filter(Boolean) as string[];
 
-      let opponentMap: Record<string, string> = {};
+      let opponentMap: Record<string, { username: string; rating: number }> = {};
       if (opponentIds.length > 0) {
         const { data: opponents } = await supabase
           .from("profiles")
-          .select("id, username")
+          .select("id, username, rating")
           .in("id", opponentIds);
         if (opponents) {
-          opponentMap = Object.fromEntries(opponents.map((o) => [o.id, o.username]));
+          opponentMap = Object.fromEntries(opponents.map((o) => [o.id, { username: o.username, rating: o.rating }]));
         }
       }
 
@@ -86,13 +239,17 @@ export default function ProfileScreen() {
         const won = m.winner_id === userId;
 
         let opponentName = "Bot";
+        let opponentRating: number | null = null;
         if (!m.is_bot_match && opponentId) {
-          opponentName = opponentMap[opponentId] ?? "Opponent";
+          const opp = opponentMap[opponentId];
+          opponentName = opp?.username ?? "Opponent";
+          opponentRating = opp?.rating ?? null;
         }
 
         return {
           id: m.id,
           opponentName,
+          opponentRating,
           playerScore,
           opponentScore,
           ratingChange,
@@ -125,19 +282,60 @@ export default function ProfileScreen() {
   };
 
   if (!profile) {
-    return (
-      <SafeAreaView className="flex-1 bg-dark items-center justify-center">
-        <Logo size="small" />
-        <ActivityIndicator size="small" color="#39FF14" style={{ marginTop: 16 }} />
-      </SafeAreaView>
-    );
+    return <ProfileSkeleton />;
   }
 
   const wins = profile.wins ?? 0;
   const losses = profile.losses ?? 0;
   const totalMatches = wins + losses;
   const winRate = totalMatches > 0 ? Math.round((wins / totalMatches) * 100) : 0;
-  const tier = profile.tier ?? "bronze";
+  const streak = profile.current_streak ?? 0;
+  const bestStreak = profile.best_streak ?? 0;
+  const rating = profile.rating ?? 0;
+  const level = profile.level ?? 1;
+  const tierConfig = getTierConfig(rating);
+
+  // Contextual motivation message
+  const getMotivation = (): { text: string; color: string } | null => {
+    const ratingToSilver = 1000 - rating;
+    const ratingToGold = 1500 - rating;
+    const ratingToDiamond = 2000 - rating;
+
+    if (streak >= 3) {
+      return { text: `${streak} win streak — keep it going!`, color: "#FF6B35" };
+    }
+    if (rating < 1000 && ratingToSilver <= 100) {
+      return { text: `${ratingToSilver} rating to Silver!`, color: "#C0C0C0" };
+    }
+    if (rating >= 1000 && rating < 1500 && ratingToGold <= 150) {
+      return { text: `${ratingToGold} rating to Gold!`, color: "#FFD700" };
+    }
+    if (rating >= 1500 && rating < 2000 && ratingToDiamond <= 200) {
+      return { text: `${ratingToDiamond} rating to Diamond!`, color: "#B9F2FF" };
+    }
+    if (winRate >= 75 && totalMatches >= 5) {
+      return { text: `${winRate}% win rate — dominant!`, color: "#10B981" };
+    }
+    if (bestStreak > 0 && streak === bestStreak && streak >= 2) {
+      return { text: "New personal best streak!", color: "#FF6B35" };
+    }
+    return null;
+  };
+
+  const motivation = getMotivation();
+
+  // Animate progress bar
+  useEffect(() => {
+    const targetProgress = tierConfig.progress * 100;
+    progressWidth.value = withTiming(targetProgress, {
+      duration: 600,
+      easing: Easing.out(Easing.cubic),
+    });
+  }, [tierConfig.progress]);
+
+  const progressAnimatedStyle = useAnimatedStyle(() => ({
+    width: `${progressWidth.value}%` as any,
+  }));
 
   const formatDate = (dateStr: string) => {
     const d = new Date(dateStr);
@@ -154,167 +352,378 @@ export default function ProfileScreen() {
   };
 
   return (
-    <SafeAreaView className="flex-1 bg-dark" edges={["bottom"]}>
-      <ScrollView className="flex-1" contentContainerStyle={{ paddingBottom: 20 }}>
-        {/* Profile Header */}
+    <SafeAreaView className="flex-1 bg-dark" edges={["top"]}>
+      {/* Background gradient */}
+      <LinearGradient
+        colors={["#050508", "#080812", "#050508"]}
+        style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }}
+      />
+
+      {/* Section 1: Custom Header */}
+      <Animated.View
+        entering={FadeIn.duration(300)}
+        className="flex-row items-center justify-between px-6 pt-3 pb-2"
+      >
+        <TextBold className="text-white" style={{ fontSize: 20 }}>
+          Profile
+        </TextBold>
+        <Pressable onPress={() => router.push("/modal")} hitSlop={12}>
+          <Ionicons name="settings-outline" size={20} color="#6B7280" />
+        </Pressable>
+      </Animated.View>
+
+      <ScrollView
+        className="flex-1"
+        contentContainerStyle={{ paddingBottom: 32 }}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor="#39FF14"
+            colors={["#39FF14"]}
+          />
+        }
+      >
+        {/* Section 2: Compact Header — Avatar + Name + Rank */}
         <Animated.View
-          entering={FadeIn.duration(400)}
-          className="items-center pt-6 pb-6 px-6"
+          entering={FadeIn.delay(100).duration(400)}
+          className="flex-row items-center mx-6 mt-5"
         >
-          {/* Avatar */}
-          <View className="w-20 h-20 rounded-full bg-dark-card border-2 border-primary items-center justify-center mb-4">
-            <TextBold className="text-primary text-3xl">
-              {(profile.username?.[0] ?? "?").toUpperCase()}
+          {/* Avatar with Tier Ring */}
+          <LinearGradient
+            colors={tierConfig.colors}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={{
+              width: 64,
+              height: 64,
+              borderRadius: 32,
+              padding: 2.5,
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <View
+              style={{
+                width: 57,
+                height: 57,
+                borderRadius: 28.5,
+                backgroundColor: "#0A0A0F",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <TextBold style={{ fontSize: 24, color: tierConfig.colors[0] }}>
+                {(profile.username?.[0] ?? "?").toUpperCase()}
+              </TextBold>
+            </View>
+          </LinearGradient>
+
+          {/* Name + Rank + Tier */}
+          <View className="ml-4 flex-1">
+            <TextBold className="text-white" style={{ fontSize: 20 }}>
+              @{profile.username}
             </TextBold>
-          </View>
-
-          <TextBold className="text-white text-2xl">@{profile.username}</TextBold>
-
-          {/* Rating Badge */}
-          <View className="flex-row items-center mt-3">
-            <View className="bg-dark-card border border-primary/30 px-4 py-2 rounded-full">
-              <View className="flex-row items-center">
-                <Ionicons name="diamond-outline" size={14} color="#39FF14" />
-                <TextBold className="text-primary text-sm ml-1.5">{profile.rating}</TextBold>
-              </View>
-            </View>
-            {globalRank && (
-              <View className="bg-dark-card border border-dark-border px-3 py-2 rounded-full ml-2">
-                <Text className="text-gray-400 text-sm">#{globalRank} Global</Text>
-              </View>
-            )}
-          </View>
-        </Animated.View>
-
-        {/* Quick Stats Grid */}
-        <Animated.View
-          entering={FadeInDown.delay(100).duration(400)}
-          className="mx-6 mb-6"
-        >
-          <View className="flex-row">
-            <View className="flex-1 bg-dark-card border border-dark-border rounded-xl p-4 mr-2 items-center">
-              <TextBold className="text-win text-2xl">{wins}</TextBold>
-              <Text className="text-gray-500 text-xs uppercase mt-1">Wins</Text>
-            </View>
-            <View className="flex-1 bg-dark-card border border-dark-border rounded-xl p-4 mr-2 items-center">
-              <TextBold className="text-lose text-2xl">{losses}</TextBold>
-              <Text className="text-gray-500 text-xs uppercase mt-1">Losses</Text>
-            </View>
-            <View className="flex-1 bg-dark-card border border-dark-border rounded-xl p-4 items-center">
-              <TextBold className="text-white text-2xl">{winRate}%</TextBold>
-              <Text className="text-gray-500 text-xs uppercase mt-1">Win Rate</Text>
+            <View className="flex-row items-center mt-1">
+              {globalRank && (
+                <View className="flex-row items-center mr-3">
+                  <Text className="text-gray-500" style={{ fontSize: 12 }}>
+                    Rank{" "}
+                  </Text>
+                  <TextSemibold className="text-white" style={{ fontSize: 12 }}>
+                    #{globalRank}
+                  </TextSemibold>
+                </View>
+              )}
+              <LinearGradient
+                colors={tierConfig.colors}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={{ borderRadius: 10, paddingHorizontal: 8, paddingVertical: 2 }}
+              >
+                <TextBold style={{ fontSize: 9, color: "#050508", letterSpacing: 0.5 }}>
+                  {tierConfig.label.toUpperCase()}
+                </TextBold>
+              </LinearGradient>
             </View>
           </View>
         </Animated.View>
 
-        {/* Streak Card */}
+        {/* Section 3: Rating + Progress (compact) */}
         <Animated.View
           entering={FadeInDown.delay(200).duration(400)}
-          className="mx-6 mb-6"
+          className="mx-6 mt-5"
         >
           <View className="bg-dark-card border border-dark-border rounded-xl p-4">
             <View className="flex-row items-center justify-between">
-              <View className="flex-row items-center">
-                <Ionicons name="flame" size={20} color="#FF6B35" />
-                <TextSemibold className="text-white ml-2">Streak</TextSemibold>
+              <View>
+                <TextBold
+                  style={{ fontSize: 36, color: "#FFFFFF", lineHeight: 42 }}
+                >
+                  {rating.toLocaleString()}
+                </TextBold>
+                <Text className="text-gray-500" style={{ fontSize: 10, marginTop: 2 }}>
+                  Level {level}
+                </Text>
               </View>
-              <View className="flex-row items-center">
-                <View className="items-end mr-6">
-                  <TextBold className="text-accent text-xl">{profile.current_streak ?? 0}</TextBold>
-                  <Text className="text-gray-500 text-xs">Current</Text>
-                </View>
-                <View className="items-end">
-                  <TextBold className="text-white text-xl">{profile.best_streak ?? 0}</TextBold>
-                  <Text className="text-gray-500 text-xs">Best</Text>
-                </View>
+              <View className="items-end">
+                <Text className="text-gray-500" style={{ fontSize: 10, letterSpacing: 0.5 }}>
+                  {tierConfig.floor} — {tierConfig.ceiling === tierConfig.floor ? "MAX" : tierConfig.ceiling}
+                </Text>
+              </View>
+            </View>
+
+            {/* Progress Bar */}
+            <View className="mt-3">
+              <View
+                style={{
+                  height: 4,
+                  backgroundColor: "rgba(255,255,255,0.08)",
+                  borderRadius: 2,
+                  overflow: "hidden",
+                }}
+              >
+                <Animated.View style={progressAnimatedStyle}>
+                  <LinearGradient
+                    colors={tierConfig.colors}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 0 }}
+                    style={{ height: 4, borderRadius: 2 }}
+                  />
+                </Animated.View>
               </View>
             </View>
           </View>
         </Animated.View>
 
-        {/* Match History */}
+        {/* Motivation Message */}
+        {motivation && (
+          <Animated.View
+            entering={FadeIn.delay(250).duration(300)}
+            className="items-center mt-4"
+          >
+            <TextSemibold style={{ fontSize: 13, color: motivation.color }}>
+              {motivation.text}
+            </TextSemibold>
+          </Animated.View>
+        )}
+
+        {/* Section 5: Compact Stats Card */}
         <Animated.View
-          entering={FadeInDown.delay(300).duration(400)}
-          className="mx-6 mb-6"
+          entering={FadeInDown.delay(300).duration(300)}
+          className="mx-6 mt-5"
+        >
+          <View className="bg-dark-card border border-dark-border rounded-xl p-4">
+            <View className="flex-row">
+              {/* Wins */}
+              <View className="flex-1 items-center">
+                <Text
+                  className="text-gray-500"
+                  style={{ fontSize: 10, letterSpacing: 1, textTransform: "uppercase" }}
+                >
+                  WINS
+                </Text>
+                <TextBold style={{ fontSize: 18, color: "#10B981", marginTop: 4 }}>
+                  {wins}
+                </TextBold>
+              </View>
+
+              <View style={{ width: 1, backgroundColor: "rgba(255,255,255,0.06)" }} />
+
+              {/* Losses */}
+              <View className="flex-1 items-center">
+                <Text
+                  className="text-gray-500"
+                  style={{ fontSize: 10, letterSpacing: 1, textTransform: "uppercase" }}
+                >
+                  LOSSES
+                </Text>
+                <TextBold style={{ fontSize: 18, color: "#EF4444", marginTop: 4 }}>
+                  {losses}
+                </TextBold>
+              </View>
+
+              <View style={{ width: 1, backgroundColor: "rgba(255,255,255,0.06)" }} />
+
+              {/* Win Rate */}
+              <View className="flex-1 items-center">
+                <Text
+                  className="text-gray-500"
+                  style={{ fontSize: 10, letterSpacing: 1, textTransform: "uppercase" }}
+                >
+                  WIN RATE
+                </Text>
+                <TextBold
+                  style={{
+                    fontSize: 18,
+                    color: winRate >= 50 ? "#10B981" : "#EF4444",
+                    marginTop: 4,
+                  }}
+                >
+                  {winRate}%
+                </TextBold>
+              </View>
+
+              <View style={{ width: 1, backgroundColor: "rgba(255,255,255,0.06)" }} />
+
+              {/* Streak */}
+              <View className="flex-1 items-center">
+                <Text
+                  className="text-gray-500"
+                  style={{ fontSize: 10, letterSpacing: 1, textTransform: "uppercase" }}
+                >
+                  STREAK
+                </Text>
+                <TextBold style={{ fontSize: 18, color: "#FF6B35", marginTop: 4 }}>
+                  {streak}
+                </TextBold>
+              </View>
+            </View>
+          </View>
+
+          {/* Best streak */}
+          {bestStreak > 0 && (
+            <View className="flex-row items-center justify-center mt-2">
+              <Ionicons name="flame" size={12} color="#4B5563" />
+              <Text className="text-gray-600 ml-1" style={{ fontSize: 11 }}>
+                Best streak: {bestStreak}
+              </Text>
+            </View>
+          )}
+        </Animated.View>
+
+        {/* Section 6: Match History */}
+        <Animated.View
+          entering={FadeInDown.delay(400).duration(300)}
+          className="mx-6 mt-6"
         >
           <View className="flex-row items-center justify-between mb-3">
-            <TextSemibold className="text-white">Recent Matches</TextSemibold>
-            <Text className="text-gray-500 text-xs">{totalMatches} total</Text>
+            <TextSemibold className="text-white" style={{ fontSize: 14 }}>
+              Recent Matches
+            </TextSemibold>
+            <Text className="text-gray-500" style={{ fontSize: 12 }}>
+              {totalMatches} total
+            </Text>
           </View>
 
           <View className="bg-dark-card border border-dark-border rounded-xl overflow-hidden">
             {loadingHistory ? (
-              <View className="p-4 items-center">
-                <ActivityIndicator size="small" color="#39FF14" />
-              </View>
+              <MatchHistorySkeleton />
             ) : matchHistory.length === 0 ? (
               <View className="p-6 items-center">
-                <Ionicons name="game-controller-outline" size={32} color="#6B7280" />
-                <Text className="text-gray-500 text-sm mt-2">No matches yet</Text>
-                <Text className="text-gray-600 text-xs mt-1">Play your first battle!</Text>
+                <Ionicons name="game-controller-outline" size={32} color="#1A1A24" />
+                <Text className="text-gray-500 mt-2" style={{ fontSize: 13 }}>
+                  No matches yet
+                </Text>
+                <Text className="text-gray-600 mt-1" style={{ fontSize: 11 }}>
+                  Win your first battle!
+                </Text>
               </View>
             ) : (
               matchHistory.map((match, index) => (
-                <View
+                <Pressable
                   key={match.id}
-                  className={`flex-row items-center justify-between p-4 ${
+                  onPress={() =>
+                    router.push({
+                      pathname: "/match/[id]",
+                      params: { id: match.id },
+                    })
+                  }
+                  style={{ overflow: "hidden" }}
+                  className={
                     index < matchHistory.length - 1 ? "border-b border-dark-border" : ""
-                  }`}
+                  }
                 >
-                  <View className="flex-row items-center flex-1">
+                  <View className="flex-row items-center p-4">
+                    {/* W/L Badge */}
                     <View
-                      className={`w-8 h-8 rounded-full items-center justify-center mr-3 ${
-                        match.won ? "bg-win/20" : "bg-lose/20"
-                      }`}
+                      style={{
+                        width: 28,
+                        height: 28,
+                        borderRadius: 6,
+                        backgroundColor: match.won
+                          ? "rgba(16,185,129,0.15)"
+                          : "rgba(239,68,68,0.15)",
+                        borderWidth: 1,
+                        borderColor: match.won
+                          ? "rgba(16,185,129,0.3)"
+                          : "rgba(239,68,68,0.3)",
+                        alignItems: "center",
+                        justifyContent: "center",
+                      }}
                     >
-                      <Ionicons
-                        name={match.won ? "checkmark" : "close"}
-                        size={16}
-                        color={match.won ? "#22C55E" : "#EF4444"}
-                      />
+                      <TextBold
+                        style={{
+                          fontSize: 12,
+                          color: match.won ? "#10B981" : "#EF4444",
+                        }}
+                      >
+                        {match.won ? "W" : "L"}
+                      </TextBold>
                     </View>
-                    <View className="flex-1">
-                      <TextMedium className="text-white">
-                        vs {match.opponentName}
-                      </TextMedium>
-                      <Text className="text-gray-500 text-xs">
-                        {match.playerScore}-{match.opponentScore} • {formatDate(match.date)}
+
+                    {/* Opponent info */}
+                    <View className="flex-1 ml-3">
+                      <View className="flex-row items-center">
+                        <TextMedium className="text-white" style={{ fontSize: 14 }}>
+                          vs {match.opponentName}
+                        </TextMedium>
+                        {match.isBotMatch && (
+                          <Ionicons
+                            name="hardware-chip-outline"
+                            size={12}
+                            color="#4B5563"
+                            style={{ marginLeft: 4 }}
+                          />
+                        )}
+                        {match.opponentRating != null && (
+                          <Text className="text-gray-500" style={{ fontSize: 12, marginLeft: 6 }}>
+                            {match.opponentRating}
+                          </Text>
+                        )}
+                      </View>
+                      <Text className="text-gray-500" style={{ fontSize: 11, marginTop: 2 }}>
+                        {match.playerScore}-{match.opponentScore} · {formatDate(match.date)}
                       </Text>
                     </View>
-                  </View>
 
-                  {match.ratingChange != null && (
-                    <TextSemibold
-                      className={match.ratingChange >= 0 ? "text-win" : "text-lose"}
-                    >
-                      {match.ratingChange >= 0 ? "+" : ""}{match.ratingChange}
-                    </TextSemibold>
-                  )}
-                </View>
+                    {/* Rating change */}
+                    {match.ratingChange != null && (
+                      <TextSemibold
+                        style={{
+                          fontSize: 14,
+                          color: match.ratingChange >= 0 ? "#10B981" : "#EF4444",
+                          marginRight: 8,
+                        }}
+                      >
+                        {match.ratingChange >= 0 ? "+" : ""}
+                        {match.ratingChange}
+                      </TextSemibold>
+                    )}
+
+                    {/* Chevron */}
+                    <Ionicons name="chevron-forward" size={16} color="#4B5563" />
+                  </View>
+                </Pressable>
               ))
             )}
           </View>
         </Animated.View>
 
-        {/* Action Buttons */}
+        {/* Section 7: Sign Out (Muted) */}
         <Animated.View
-          entering={FadeInDown.delay(400).duration(400)}
-          className="mx-6"
+          entering={FadeInDown.delay(500).duration(300)}
+          className="mx-6 mt-8 mb-4"
         >
           <Pressable
-            onPress={() => router.push("/modal")}
-            className="flex-row items-center justify-center bg-dark-card border border-dark-border rounded-xl p-4 mb-3 active:bg-dark-elevated"
-          >
-            <Ionicons name="settings-outline" size={18} color="#6B7280" />
-            <TextMedium className="text-gray-400 ml-2">Settings</TextMedium>
-          </Pressable>
-
-          <Pressable
             onPress={handleSignOut}
-            className="flex-row items-center justify-center bg-dark-card border border-lose/30 rounded-xl p-4 active:bg-lose/10"
+            className="flex-row items-center justify-center py-3"
           >
-            <Ionicons name="log-out-outline" size={18} color="#EF4444" />
-            <TextMedium className="text-lose ml-2">Sign Out</TextMedium>
+            <Ionicons name="log-out-outline" size={16} color="#4B5563" />
+            <TextMedium style={{ fontSize: 14, color: "#4B5563", marginLeft: 6 }}>
+              Sign Out
+            </TextMedium>
           </Pressable>
         </Animated.View>
       </ScrollView>

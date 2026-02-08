@@ -1,4 +1,4 @@
-import { View, Text as RNText, Pressable, ActivityIndicator } from "react-native";
+import { View, Text as RNText, Pressable } from "react-native";
 import { Text, TextBold, TextSemibold, TextMedium } from "@/components/ui/Text";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, router } from "expo-router";
@@ -7,10 +7,11 @@ import Animated, {
   useSharedValue,
   useAnimatedStyle,
   withTiming,
-  withSpring,
-  withSequence,
   withDelay,
+  withRepeat,
+  withSequence,
   cancelAnimation,
+  Easing,
   FadeIn,
   FadeInDown,
   FadeInUp,
@@ -23,6 +24,34 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useShareCard } from "@/hooks/useShareCard";
 import { ShareCard } from "@/components/ShareCard";
 import { createBotMatch } from "@/lib/supabase";
+import { TierPromotion } from "@/components/TierPromotion";
+import { Confetti } from "@/components/Confetti";
+
+// Animated number counter that counts from `from` to `to`
+function useCountAnimation(from: number, to: number, delay: number = 0, duration: number = 800) {
+  const [display, setDisplay] = useState(from);
+
+  useEffect(() => {
+    if (from === to) {
+      setDisplay(to);
+      return;
+    }
+
+    const startTime = Date.now() + delay;
+    const timer = setInterval(() => {
+      const elapsed = Date.now() - startTime;
+      if (elapsed < 0) return;
+      const progress = Math.min(1, elapsed / duration);
+      const eased = 1 - Math.pow(1 - progress, 3); // ease out cubic
+      setDisplay(Math.round(from + (to - from) * eased));
+      if (progress >= 1) clearInterval(timer);
+    }, 16);
+
+    return () => clearInterval(timer);
+  }, [from, to, delay, duration]);
+
+  return display;
+}
 
 export default function BattleScreen() {
   const { id, opponentUsername, opponentRating, isBotMatch } =
@@ -36,6 +65,8 @@ export default function BattleScreen() {
   const { user, profile } = useAuth();
   const userId = user?.id ?? "";
   const { viewShotRef, isSharing, share } = useShareCard();
+  const [promotionDismissed, setPromotionDismissed] = useState(false);
+  const [showConfetti, setShowConfetti] = useState(false);
 
   const battle = useBattle({
     matchId: id,
@@ -56,7 +87,7 @@ export default function BattleScreen() {
     if (battle.phase === "question") {
       cancelAnimation(timerWidth);
       timerWidth.value = 100;
-      timerWidth.value = withTiming(0, { duration: 20000 });
+      timerWidth.value = withTiming(0, { duration: 15000 });
     } else {
       // Stop animation on any other phase (result, explanation, etc.)
       cancelAnimation(timerWidth);
@@ -81,6 +112,30 @@ export default function BattleScreen() {
     }
   }, [battle.phase]);
 
+  // Rating count-up animation
+  const ratingChange = battle.matchResult?.rating_change ?? 0;
+  const newRating = battle.matchResult?.new_rating ?? (profile?.rating ?? 0);
+  const oldRating = newRating - ratingChange;
+  const animatedRating = useCountAnimation(
+    oldRating,
+    newRating,
+    600, // delay: wait for card to animate in
+    900
+  );
+  const animatedDelta = useCountAnimation(
+    0,
+    ratingChange,
+    600,
+    900
+  );
+
+  // Trigger confetti on win
+  useEffect(() => {
+    if (battle.phase === "match_end" && battle.matchResult?.winner === "player") {
+      setShowConfetti(true);
+    }
+  }, [battle.phase, battle.matchResult]);
+
   const handleExit = () => {
     router.back();
   };
@@ -88,8 +143,7 @@ export default function BattleScreen() {
   const handleBattle = async () => {
     if (!userId) return;
     try {
-      // Create a new bot match (practice mode by default from post-match)
-      const result = await createBotMatch(userId, false, null);
+      const result = await createBotMatch(userId, true, null);
       router.replace({
         pathname: "/battle/[id]",
         params: {
@@ -104,26 +158,22 @@ export default function BattleScreen() {
     }
   };
 
-  // Loading Phase
-  if (battle.phase === "loading") {
-    return (
-      <SafeAreaView className="flex-1 bg-dark items-center justify-center">
-        <ActivityIndicator size="large" color="#39FF14" />
-        <Text className="text-gray-400 text-lg mt-4">Loading battle...</Text>
-      </SafeAreaView>
-    );
-  }
-
-  // Countdown Phase
-  if (battle.phase === "countdown") {
+  // Loading + Countdown — unified "Get Ready" screen
+  if (battle.phase === "loading" || battle.phase === "countdown") {
     return (
       <SafeAreaView className="flex-1 bg-dark items-center justify-center">
         <TextMedium className="text-gray-400 text-lg mb-4">
           Round {battle.currentRound}
         </TextMedium>
-        <TextBold className="text-8xl text-primary">
-          {battle.countdown}
-        </TextBold>
+        {battle.phase === "countdown" ? (
+          <Animated.View entering={ZoomIn.duration(300)}>
+            <TextBold className="text-8xl text-primary">
+              {battle.countdown}
+            </TextBold>
+          </Animated.View>
+        ) : (
+          <PulsingDots />
+        )}
         <TextMedium className="text-gray-400 text-lg mt-4">Get Ready!</TextMedium>
       </SafeAreaView>
     );
@@ -137,15 +187,29 @@ export default function BattleScreen() {
       ? battle.matchResult.winner === "player"
       : playerScore > opponentScore;
 
-    const ratingChange = battle.matchResult?.rating_change ?? 0;
-    const newRating = battle.matchResult?.new_rating ?? (profile?.rating ?? 0);
     const xpEarned = battle.matchResult?.xp_earned ?? 0;
     const newLevel = battle.matchResult?.new_level ?? (profile?.level ?? 1);
     const leveledUp = battle.matchResult?.leveled_up ?? false;
     const isComeback = battle.matchResult?.is_comeback ?? false;
+    const promotedTo = battle.matchResult?.promoted_to ?? null;
 
     return (
       <SafeAreaView className="flex-1 bg-dark">
+        {/* Confetti on win */}
+        {isWinner && showConfetti && (
+          <View style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, zIndex: 50, pointerEvents: "none" }}>
+            <Confetti count={45} />
+          </View>
+        )}
+
+        {/* Tier Promotion Celebration Overlay */}
+        {promotedTo && !promotionDismissed && (
+          <TierPromotion
+            tier={promotedTo}
+            onDismiss={() => setPromotionDismissed(true)}
+          />
+        )}
+
         {/* Hidden ShareCard for capture */}
         <ViewShot
           ref={viewShotRef}
@@ -247,9 +311,9 @@ export default function BattleScreen() {
                         ratingChange > 0 ? "text-win" : "text-lose"
                       }`}
                     >
-                      {ratingChange > 0 ? "+" : ""}{ratingChange}
+                      {animatedDelta > 0 ? "+" : animatedDelta < 0 ? "" : ""}{animatedDelta}
                     </TextBold>
-                    <TextBold className="text-white text-lg">{newRating}</TextBold>
+                    <TextBold className="text-white text-lg">{animatedRating}</TextBold>
                   </View>
                 </View>
               )}
@@ -474,9 +538,7 @@ export default function BattleScreen() {
               className="bg-dark-card border-2 border-primary rounded-xl p-3 mt-4 active:bg-dark-elevated"
             >
               <Text className="text-primary text-center font-bold">
-                {(battle.player?.score ?? 0) >= 2 ||
-                (battle.opponent?.score ?? 0) >= 2 ||
-                battle.currentRound >= battle.totalRounds
+                {battle.currentRound >= battle.totalRounds
                   ? "See Results"
                   : "Next Round"}
               </Text>
@@ -500,5 +562,64 @@ export default function BattleScreen() {
         </View>
       )}
     </SafeAreaView>
+  );
+}
+
+function PulsingDots() {
+  const dot1 = useSharedValue(0.3);
+  const dot2 = useSharedValue(0.3);
+  const dot3 = useSharedValue(0.3);
+
+  useEffect(() => {
+    dot1.value = withRepeat(
+      withSequence(
+        withTiming(1, { duration: 400 }),
+        withTiming(0.3, { duration: 400 })
+      ),
+      -1
+    );
+    dot2.value = withDelay(
+      150,
+      withRepeat(
+        withSequence(
+          withTiming(1, { duration: 400 }),
+          withTiming(0.3, { duration: 400 })
+        ),
+        -1
+      )
+    );
+    dot3.value = withDelay(
+      300,
+      withRepeat(
+        withSequence(
+          withTiming(1, { duration: 400 }),
+          withTiming(0.3, { duration: 400 })
+        ),
+        -1
+      )
+    );
+  }, []);
+
+  const s1 = useAnimatedStyle(() => ({ opacity: dot1.value }));
+  const s2 = useAnimatedStyle(() => ({ opacity: dot2.value }));
+  const s3 = useAnimatedStyle(() => ({ opacity: dot3.value }));
+
+  return (
+    <View style={{ flexDirection: "row", gap: 8, height: 86, alignItems: "center" }}>
+      {[s1, s2, s3].map((style, i) => (
+        <Animated.View
+          key={i}
+          style={[
+            {
+              width: 12,
+              height: 12,
+              borderRadius: 6,
+              backgroundColor: "#39FF14",
+            },
+            style,
+          ]}
+        />
+      ))}
+    </View>
   );
 }

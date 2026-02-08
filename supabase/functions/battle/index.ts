@@ -55,6 +55,12 @@ Deno.serve(async (req) => {
           body.answer,
           body.client_time_ms
         );
+      case "award_league_points":
+        return await handleAwardLeaguePoints(
+          supabase,
+          body.match_id,
+          user.id
+        );
       default:
         return jsonResponse({ error: "Unknown action" }, 400);
     }
@@ -328,7 +334,7 @@ async function processRoundResult(
     .eq("id", matchId);
 
   // Check if match is over (first to 2 wins)
-  const matchOver = p1Score >= 2 || p2Score >= 2 || roundNumber >= 3;
+  const matchOver = roundNumber >= 5;
 
   const channel = supabase.channel(`battle:${matchId}`);
 
@@ -358,8 +364,8 @@ async function processRoundResult(
       winnerId = (match.player2_id as string) ?? "bot";
 
     const isComeback =
-      (winnerId === match.player1_id && p2Score === 1 && p1Score === 2) ||
-      (winnerId !== match.player1_id && p1Score === 1 && p2Score === 2);
+      (winnerId === match.player1_id && p2Score === 2 && p1Score === 3) ||
+      (winnerId !== match.player1_id && p1Score === 2 && p2Score === 3);
 
     // Calculate rating changes
     let p1RatingChange = 0;
@@ -467,6 +473,50 @@ async function processRoundResult(
       })
       .eq("id", matchId);
 
+    // Award league points for ranked matches
+    if (match.is_ranked) {
+      const LEAGUE_WIN = 3;
+      const LEAGUE_LOSS = 1;
+
+      // Monday of current week as YYYY-MM-DD
+      const now = new Date();
+      const day = now.getDay();
+      const diff = day === 0 ? 6 : day - 1;
+      const monday = new Date(now);
+      monday.setDate(now.getDate() - diff);
+      const weekStart = `${monday.getFullYear()}-${String(monday.getMonth() + 1).padStart(2, "0")}-${String(monday.getDate()).padStart(2, "0")}`;
+
+      // Player 1
+      const { data: p1Prof } = await supabase
+        .from("profiles")
+        .select("tier")
+        .eq("id", match.player1_id as string)
+        .single();
+      await upsertLeagueMembership(
+        supabase,
+        match.player1_id as string,
+        weekStart,
+        winnerId === match.player1_id ? LEAGUE_WIN : LEAGUE_LOSS,
+        p1Prof?.tier ?? "bronze"
+      );
+
+      // Player 2 (human only)
+      if (match.player2_id) {
+        const { data: p2Prof } = await supabase
+          .from("profiles")
+          .select("tier")
+          .eq("id", match.player2_id as string)
+          .single();
+        await upsertLeagueMembership(
+          supabase,
+          match.player2_id as string,
+          weekStart,
+          winnerId === match.player2_id ? LEAGUE_WIN : LEAGUE_LOSS,
+          p2Prof?.tier ?? "bronze"
+        );
+      }
+    }
+
     // Broadcast battle end
     await channel.send({
       type: "broadcast",
@@ -530,6 +580,95 @@ async function processRoundResult(
       player2_score: p2Score,
     },
   });
+}
+
+async function handleAwardLeaguePoints(
+  supabase: ReturnType<typeof createClient>,
+  matchId: string,
+  userId: string
+) {
+  // Fetch the match to verify it's ranked and the user is a participant
+  const { data: match, error: matchErr } = await supabase
+    .from("matches")
+    .select("*")
+    .eq("id", matchId)
+    .single();
+
+  if (matchErr || !match) {
+    return jsonResponse({ error: "Match not found" }, 404);
+  }
+
+  if (match.player1_id !== userId && match.player2_id !== userId) {
+    return jsonResponse({ error: "Not a participant" }, 403);
+  }
+
+  if (!match.is_ranked) {
+    return jsonResponse({ status: "not_ranked" });
+  }
+
+  if (!match.winner_id && !match.ended_at) {
+    return jsonResponse({ error: "Match not ended" }, 400);
+  }
+
+  // Compute week start
+  const now = new Date();
+  const day = now.getDay();
+  const diff = day === 0 ? 6 : day - 1;
+  const monday = new Date(now);
+  monday.setDate(now.getDate() - diff);
+  const weekStart = `${monday.getFullYear()}-${String(monday.getMonth() + 1).padStart(2, "0")}-${String(monday.getDate()).padStart(2, "0")}`;
+
+  const LEAGUE_WIN = 3;
+  const LEAGUE_LOSS = 1;
+
+  const isWinner = match.winner_id === userId;
+  const points = isWinner ? LEAGUE_WIN : LEAGUE_LOSS;
+
+  const { data: prof } = await supabase
+    .from("profiles")
+    .select("tier")
+    .eq("id", userId)
+    .single();
+
+  await upsertLeagueMembership(
+    supabase,
+    userId,
+    weekStart,
+    points,
+    prof?.tier ?? "bronze"
+  );
+
+  return jsonResponse({ status: "awarded", points });
+}
+
+async function upsertLeagueMembership(
+  supabase: ReturnType<typeof createClient>,
+  userId: string,
+  weekStart: string,
+  points: number,
+  tier: string
+) {
+  const { data: existing } = await supabase
+    .from("league_memberships")
+    .select("id, points")
+    .eq("user_id", userId)
+    .eq("week_start", weekStart)
+    .single();
+
+  if (existing) {
+    await supabase
+      .from("league_memberships")
+      .update({ points: existing.points + points, league_tier: tier })
+      .eq("id", existing.id);
+  } else {
+    await supabase.from("league_memberships").insert({
+      user_id: userId,
+      league_tier: tier,
+      league_group: 1,
+      week_start: weekStart,
+      points,
+    });
+  }
 }
 
 function jsonResponse(data: unknown, status = 200) {

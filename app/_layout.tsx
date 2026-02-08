@@ -8,6 +8,7 @@ import {
   Outfit_600SemiBold,
   Outfit_700Bold,
 } from "@expo-google-fonts/outfit";
+import { Teko_700Bold } from "@expo-google-fonts/teko";
 import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { useEffect } from "react";
@@ -49,6 +50,7 @@ export default function RootLayout() {
     Outfit_500Medium,
     Outfit_600SemiBold,
     Outfit_700Bold,
+    Teko_700Bold,
     ...FontAwesome.font,
   });
 
@@ -121,6 +123,13 @@ function RootLayoutNav() {
               options={{
                 headerShown: false,
                 gestureEnabled: false,
+              }}
+            />
+            <Stack.Screen
+              name="match/[id]"
+              options={{
+                headerShown: false,
+                animation: "slide_from_right",
               }}
             />
             <Stack.Screen

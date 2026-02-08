@@ -60,72 +60,50 @@ async function selectQuestions(
 
   const seenIds = (seen ?? []).map((s) => s.question_id);
 
-  // Query target difficulty ± 1 to widen the pool (e.g. bronze gets diff 1+2)
-  const minDiff = Math.max(1, difficulty - 1);
-  const maxDiff = Math.min(4, difficulty + 1);
-
-  // Fetch unseen questions in the difficulty range
-  let query = supabase
-    .from("questions")
-    .select("id")
-    .gte("difficulty", minDiff)
-    .lte("difficulty", maxDiff)
-    .limit(20);
-
-  // Filter by language if specified
-  if (language) {
-    query = query.ilike("language", language);
-  }
-
-  if (seenIds.length > 0) {
-    query = query.not("id", "in", `(${seenIds.join(",")})`);
-  }
-
-  let { data: questions } = await query;
-
-  // Fallback: allow seen questions in the same difficulty range
-  if (!questions || questions.length < 3) {
-    const have = (questions ?? []).map((q) => q.id);
-    const needed = 20 - have.length;
-    let fallbackQuery = supabase
+  function buildQuery(minD: number, maxD: number, excludeIds: string[], limit: number) {
+    let q = supabase
       .from("questions")
       .select("id")
-      .gte("difficulty", minDiff)
-      .lte("difficulty", maxDiff)
-      .limit(needed);
-    if (language) {
-      fallbackQuery = fallbackQuery.ilike("language", language);
+      .gte("difficulty", minD)
+      .lte("difficulty", maxD)
+      .limit(limit);
+    if (language) q = q.ilike("language", language);
+    if (excludeIds.length > 0) {
+      q = q.not("id", "in", `(${excludeIds.join(",")})`);
     }
-    if (have.length > 0) {
-      fallbackQuery = fallbackQuery.not("id", "in", `(${have.join(",")})`);
-    }
-    const { data: fallback } = await fallbackQuery;
-    questions = [...(questions ?? []), ...(fallback ?? [])];
+    return q;
   }
 
-  // Last resort: any questions (drop language filter if needed)
-  if (!questions || questions.length === 0) {
-    let fallbackQuery = supabase
-      .from("questions")
-      .select("id")
-      .limit(20);
-    if (language) {
-      fallbackQuery = fallbackQuery.ilike("language", language);
-    }
-    const { data: any20 } = await fallbackQuery;
-    questions = any20 ?? [];
+  // Step 1: Prioritize exact difficulty match (unseen)
+  let { data: questions } = await buildQuery(difficulty, difficulty, seenIds, 20);
+  let pool = questions ?? [];
+
+  // Step 2: If not enough, expand to ±1 difficulty (unseen)
+  if (pool.length < 3) {
+    const have = pool.map((q) => q.id);
+    const minDiff = Math.max(1, difficulty - 1);
+    const maxDiff = Math.min(4, difficulty + 1);
+    const { data: extra } = await buildQuery(minDiff, maxDiff, [...seenIds, ...have], 20 - have.length);
+    pool = [...pool, ...(extra ?? [])];
   }
 
-  // Ultimate fallback: any questions regardless of language
-  if (!questions || questions.length === 0) {
-    const { data: any20 } = await supabase
-      .from("questions")
-      .select("id")
-      .limit(20);
-    questions = any20 ?? [];
+  // Step 3: If still not enough, allow seen questions at exact difficulty
+  if (pool.length < 3) {
+    const have = pool.map((q) => q.id);
+    const { data: extra } = await buildQuery(difficulty, difficulty, have, 20 - have.length);
+    pool = [...pool, ...(extra ?? [])];
   }
 
-  return shuffleAndPick(questions, 3);
+  // Step 4: Last resort — any questions
+  if (pool.length < 3) {
+    const have = pool.map((q) => q.id);
+    let q = supabase.from("questions").select("id").limit(20);
+    if (have.length > 0) q = q.not("id", "in", `(${have.join(",")})`);
+    const { data: any20 } = await q;
+    pool = [...pool, ...(any20 ?? [])];
+  }
+
+  return shuffleAndPick(pool, 5);
 }
 
 export async function createBotMatch(
@@ -493,4 +471,67 @@ export async function checkBothAnswered(matchId: string, roundNumber: number) {
     .eq("round_number", roundNumber)
     .single();
   return data?.player1_answer !== null && data?.player2_answer !== null;
+}
+
+// --- League points (direct DB, no edge function) ---
+
+export async function awardLeaguePoints(
+  userId: string,
+  isWinner: boolean
+) {
+  const LEAGUE_WIN = 3;
+  const LEAGUE_LOSS = 1;
+  const points = isWinner ? LEAGUE_WIN : LEAGUE_LOSS;
+
+  // Get user's current tier
+  const { data: prof } = await supabase
+    .from("profiles")
+    .select("tier")
+    .eq("id", userId)
+    .single();
+
+  const tier = prof?.tier ?? "bronze";
+
+  // Compute week start (Monday)
+  const now = new Date();
+  const day = now.getDay();
+  const diff = day === 0 ? 6 : day - 1;
+  const d = new Date(now);
+  d.setDate(now.getDate() - diff);
+  const weekStart = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+
+  // Check for existing membership this week
+  const { data: existing } = await supabase
+    .from("league_memberships")
+    .select("id, points")
+    .eq("user_id", userId)
+    .eq("week_start", weekStart)
+    .single();
+
+  if (existing) {
+    const { error } = await supabase
+      .from("league_memberships")
+      .update({ points: existing.points + points, league_tier: tier })
+      .eq("id", existing.id);
+    if (error) {
+      console.warn("[League] Update error:", error);
+    } else {
+      console.log("[League] Points updated:", existing.points + points);
+    }
+  } else {
+    const { error } = await supabase
+      .from("league_memberships")
+      .insert({
+        user_id: userId,
+        league_tier: tier,
+        league_group: 1,
+        week_start: weekStart,
+        points,
+      });
+    if (error) {
+      console.warn("[League] Insert error:", error);
+    } else {
+      console.log("[League] New membership created with points:", points);
+    }
+  }
 }
