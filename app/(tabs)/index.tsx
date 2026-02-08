@@ -5,6 +5,7 @@ import {
   Modal,
   RefreshControl,
   Text as RNText,
+  useWindowDimensions,
 } from "react-native";
 import { Text, TextBold, TextSemibold, TextMedium } from "@/components/ui/Text";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -57,6 +58,7 @@ interface RecentMatch {
 export default function HomeScreen() {
   const { user, profile, refreshProfile } = useAuth();
   const { milestones, checkMilestones, clearMilestones } = useMilestones();
+  const { width: screenWidth } = useWindowDimensions();
   const [isMatchmaking, setIsMatchmaking] = useState(false);
   const [matchmakingText, setMatchmakingText] = useState("Finding opponent...");
   const [leagueData, setLeagueData] = useState<{
@@ -213,12 +215,12 @@ export default function HomeScreen() {
       ),
       -1,
     );
-    // Shimmer sweep with pause between
+    // Shimmer sweep with pause between - use screen width to ensure full sweep
     shimmerX.value = withRepeat(
       withSequence(
         withDelay(
           3500,
-          withTiming(400, {
+          withTiming(screenWidth, {
             duration: 1000,
             easing: Easing.inOut(Easing.ease),
           }),
@@ -227,7 +229,7 @@ export default function HomeScreen() {
       ),
       -1,
     );
-  }, []);
+  }, [screenWidth]);
 
   // Refresh profile and league data when screen comes into focus
   useFocusEffect(

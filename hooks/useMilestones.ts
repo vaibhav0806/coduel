@@ -1,11 +1,12 @@
 import { useRef, useCallback, useState } from "react";
 import { Profile } from "@/types/database";
+import { Ionicons } from "@expo/vector-icons";
 
 export interface Milestone {
   id: string;
   title: string;
   subtitle: string;
-  icon: string;
+  icon: keyof typeof Ionicons.glyphMap;
   color: string;
 }
 
@@ -41,7 +42,7 @@ function detectMilestones(prev: ProfileSnapshot, curr: ProfileSnapshot): Milesto
       id: "first_victory",
       title: "First Victory!",
       subtitle: "Your journey begins",
-      icon: "🏆",
+      icon: "trophy",
       color: "#FFD700",
     });
   }
@@ -54,7 +55,7 @@ function detectMilestones(prev: ProfileSnapshot, curr: ProfileSnapshot): Milesto
         id: `streak_${n}`,
         title: `${n} Win Streak!`,
         subtitle: "You're unstoppable",
-        icon: "🔥",
+        icon: "flame",
         color: "#FF6B35",
       });
       streakFired = true;
@@ -71,7 +72,7 @@ function detectMilestones(prev: ProfileSnapshot, curr: ProfileSnapshot): Milesto
           id: `wins_${n}`,
           title: `${n} Wins!`,
           subtitle: "A true competitor",
-          icon: "⭐",
+          icon: "star",
           color: "#39FF14",
         });
         break;
@@ -89,7 +90,7 @@ function detectMilestones(prev: ProfileSnapshot, curr: ProfileSnapshot): Milesto
       id: "new_best_streak",
       title: "New Best Streak!",
       subtitle: `${curr.best_streak} wins in a row`,
-      icon: "📈",
+      icon: "trending-up",
       color: "#FF6B35",
     });
   }
@@ -100,7 +101,7 @@ function detectMilestones(prev: ProfileSnapshot, curr: ProfileSnapshot): Milesto
       id: `level_${curr.level}`,
       title: `Level ${curr.level}!`,
       subtitle: "Keep climbing",
-      icon: "🎯",
+      icon: "ribbon",
       color: "#8B5CF6",
     });
   }

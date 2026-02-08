@@ -630,13 +630,18 @@ export default function BattleScreen() {
       {/* Reactions Bar */}
       {battle.phase === "question" && (
         <View className="flex-row justify-center space-x-4 pb-4">
-          {["👀", "🔥", "💀", "🧠"].map((emoji) => (
+          {[
+            { icon: "eye-outline" as const, color: "#60A5FA" },
+            { icon: "flame" as const, color: "#F97316" },
+            { icon: "skull-outline" as const, color: "#A78BFA" },
+            { icon: "bulb-outline" as const, color: "#FBBF24" },
+          ].map((reaction) => (
             <Pressable
-              key={emoji}
-              onPress={() => battle.sendReaction(emoji)}
+              key={reaction.icon}
+              onPress={() => battle.sendReaction(reaction.icon)}
               className="w-12 h-12 bg-dark-card rounded-full items-center justify-center border border-dark-border"
             >
-              <Text className="text-2xl">{emoji}</Text>
+              <Ionicons name={reaction.icon} size={24} color={reaction.color} />
             </Pressable>
           ))}
         </View>

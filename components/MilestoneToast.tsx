@@ -3,6 +3,7 @@ import { Pressable, View } from "react-native";
 import { TextBold, Text } from "@/components/ui/Text";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as Haptics from "expo-haptics";
+import { Ionicons } from "@expo/vector-icons";
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -16,7 +17,7 @@ export interface Milestone {
   id: string;
   title: string;
   subtitle: string;
-  icon: string;
+  icon: keyof typeof Ionicons.glyphMap;
   color: string;
 }
 
@@ -104,10 +105,10 @@ function MilestoneToast({ milestone, topInset, onDismiss }: MilestoneToastProps)
               paddingHorizontal: 14,
             }}
           >
-            {/* Emoji icon */}
-            <Text style={{ fontSize: 28, marginRight: 12 }}>
-              {milestone.icon}
-            </Text>
+            {/* Icon */}
+            <View style={{ marginRight: 12 }}>
+              <Ionicons name={milestone.icon} size={28} color={milestone.color} />
+            </View>
 
             {/* Text column */}
             <View style={{ flex: 1 }}>

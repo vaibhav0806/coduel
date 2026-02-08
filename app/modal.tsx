@@ -650,7 +650,9 @@ export default function SettingsScreen() {
                       : "bg-dark-elevated border border-transparent"
                   }`}
                 >
-                  <Text style={{ fontSize: 24, marginRight: 12 }}>🌍</Text>
+                  <View style={{ marginRight: 12 }}>
+                  <Ionicons name="globe-outline" size={24} color="#6B7280" />
+                </View>
                   <TextMedium
                     style={{
                       fontSize: 15,
