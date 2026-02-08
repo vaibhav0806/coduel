@@ -7,6 +7,7 @@ import {
   fetchRoundResult,
   checkBothAnswered,
   awardLeaguePoints,
+  forfeitMatch,
 } from "@/lib/supabase";
 import {
   calculateRatingChange,
@@ -61,6 +62,7 @@ interface MatchResult {
   opponent_score: number;
   rating_change: number;
   is_comeback: boolean;
+  is_forfeit: boolean;
   xp_earned: number;
   new_rating: number;
   new_level: number;
@@ -167,8 +169,10 @@ export function useBattle({
   const [roundResults, setRoundResults] = useState<RoundResult[]>([]);
   const [isPlayer1, setIsPlayer1] = useState(true);
   const [countdown, setCountdown] = useState(3);
+  const [opponentForfeited, setOpponentForfeited] = useState(false);
 
   const channelRef = useRef<RealtimeChannel | null>(null);
+  const forfeitDataRef = useRef<{ rating_change: number; new_rating: number } | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const startTimeRef = useRef<number>(0);
@@ -280,6 +284,7 @@ export function useBattle({
           opponent_score: oScore,
           rating_change: isRankedRef.current ? ratingChange : 0,
           is_comeback: isComeback,
+          is_forfeit: false,
           xp_earned: xpResult.totalXP,
           new_rating: newRating,
           new_level: xpUpdate.newLevel,
@@ -463,6 +468,18 @@ export function useBattle({
           if (submittedRef.current) {
             processHumanRound();
           }
+        }
+      })
+      .on("broadcast", { event: "opponent_forfeited" }, ({ payload }) => {
+        if (payload.forfeited_by !== userId) {
+          console.log("[Battle] Opponent forfeited");
+          forfeitDataRef.current = {
+            rating_change: payload.rating_change,
+            new_rating: payload.new_rating,
+          };
+          clearTimer();
+          clearPoll();
+          setOpponentForfeited(true);
         }
       })
       .subscribe();
@@ -656,6 +673,68 @@ export function useBattle({
     setPhase("countdown");
   }, [matchResult, currentRound]);
 
+  const handleForfeit = useCallback(async () => {
+    clearTimer();
+    clearPoll();
+
+    try {
+      const result = await forfeitMatch(matchId, userId);
+
+      const playerRating = playerRef.current?.rating ?? 0;
+      const oldTier = getTierForRating(playerRating);
+      const newTier = getTierForRating(result.new_rating);
+      const tierOrder = ["bronze", "silver", "gold", "diamond"] as const;
+      const promoted = tierOrder.indexOf(newTier) > tierOrder.indexOf(oldTier);
+
+      setMatchResult({
+        winner: "opponent",
+        player_score: playerScoreRef.current,
+        opponent_score: opponentScoreRef.current,
+        rating_change: result.rating_change,
+        is_comeback: false,
+        is_forfeit: true,
+        xp_earned: result.xp_earned,
+        new_rating: result.new_rating,
+        new_level: result.new_level,
+        leveled_up: result.leveled_up,
+        promoted_to: promoted ? (newTier as "silver" | "gold" | "diamond") : null,
+      });
+      setPhase("match_end");
+    } catch (err) {
+      console.error("[Battle] Forfeit error:", err);
+    }
+  }, [matchId, userId, clearTimer, clearPoll]);
+
+  const handleOpponentForfeitContinue = useCallback(async () => {
+    const data = forfeitDataRef.current;
+    const playerRating = playerRef.current?.rating ?? 0;
+    const newRating = data?.new_rating ?? playerRating;
+    const ratingChange = data?.rating_change ?? 0;
+
+    const oldTier = getTierForRating(playerRating);
+    const newTier = getTierForRating(newRating);
+    const tierOrder = ["bronze", "silver", "gold", "diamond"] as const;
+    const promoted = isRankedRef.current && tierOrder.indexOf(newTier) > tierOrder.indexOf(oldTier);
+
+    const xpResult = calculateMatchXP(true);
+
+    setMatchResult({
+      winner: "player",
+      player_score: playerScoreRef.current,
+      opponent_score: opponentScoreRef.current,
+      rating_change: isRankedRef.current ? ratingChange : 0,
+      is_comeback: false,
+      is_forfeit: true,
+      xp_earned: xpResult.totalXP,
+      new_rating: newRating,
+      new_level: playerRef.current?.rating ? getLevelFromXP(0).level : 1, // approximate
+      leveled_up: false,
+      promoted_to: promoted ? (newTier as "silver" | "gold" | "diamond") : null,
+    });
+    setOpponentForfeited(false);
+    setPhase("match_end");
+  }, []);
+
   return {
     phase,
     currentRound,
@@ -676,6 +755,9 @@ export function useBattle({
     sendReaction,
     showExplanation,
     nextRound,
+    handleForfeit,
+    opponentForfeited,
+    handleOpponentForfeitContinue,
   };
 }
 

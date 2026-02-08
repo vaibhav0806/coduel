@@ -2,6 +2,8 @@ import { Tabs } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+type IconName = React.ComponentProps<typeof Ionicons>["name"];
+
 export default function TabLayout() {
   const insets = useSafeAreaInsets();
 
@@ -9,26 +11,17 @@ export default function TabLayout() {
     <Tabs
       screenOptions={{
         tabBarActiveTintColor: "#39FF14",
-        tabBarInactiveTintColor: "#6B7280",
+        tabBarInactiveTintColor: "#3A3A44",
+        tabBarShowLabel: false,
         tabBarStyle: {
-          backgroundColor: "#0A0A0F",
-          borderTopColor: "#1A1A24",
-          borderTopWidth: 1,
-          height: 60 + insets.bottom,
-          paddingBottom: insets.bottom + 8,
-          paddingTop: 8,
+          backgroundColor: "#08080D",
+          borderTopWidth: 0,
+          height: 48 + insets.bottom,
+          paddingBottom: insets.bottom,
         },
-        tabBarLabelStyle: {
-          fontSize: 12,
-          fontWeight: "600",
-        },
-        headerStyle: {
-          backgroundColor: "#050508",
-        },
+        headerStyle: { backgroundColor: "#050508" },
         headerTintColor: "#FFFFFF",
-        headerTitleStyle: {
-          fontWeight: "bold",
-        },
+        headerTitleStyle: { fontWeight: "bold" },
       }}
     >
       <Tabs.Screen
@@ -36,8 +29,12 @@ export default function TabLayout() {
         options={{
           title: "Home",
           headerShown: false,
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="home" size={size} color={color} />
+          tabBarIcon: ({ focused }) => (
+            <Ionicons
+              name={focused ? "home" : "home-outline"}
+              size={22}
+              color={focused ? "#39FF14" : "#3A3A44"}
+            />
           ),
         }}
       />
@@ -46,8 +43,12 @@ export default function TabLayout() {
         options={{
           title: "Ranks",
           headerShown: false,
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="trophy" size={size} color={color} />
+          tabBarIcon: ({ focused }) => (
+            <Ionicons
+              name={focused ? "trophy" : "trophy-outline"}
+              size={22}
+              color={focused ? "#39FF14" : "#3A3A44"}
+            />
           ),
         }}
       />
@@ -56,8 +57,12 @@ export default function TabLayout() {
         options={{
           title: "Profile",
           headerShown: false,
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="person" size={size} color={color} />
+          tabBarIcon: ({ focused }) => (
+            <Ionicons
+              name={focused ? "person" : "person-outline"}
+              size={22}
+              color={focused ? "#39FF14" : "#3A3A44"}
+            />
           ),
         }}
       />

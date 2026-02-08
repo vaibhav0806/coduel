@@ -1,4 +1,5 @@
 import { View, Text } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 
 const tierColors: Record<string, [string, string]> = {
@@ -65,9 +66,12 @@ export function ShareCard({
 
       {/* Result */}
       <View style={{ alignItems: "center" }}>
-        <Text style={{ fontSize: 48, marginBottom: 4 }}>
-          {isWinner ? "🏆" : "😢"}
-        </Text>
+        <Ionicons
+          name={isWinner ? "trophy" : "sad-outline"}
+          size={48}
+          color={isWinner ? "#F59E0B" : "#EF4444"}
+          style={{ marginBottom: 4 }}
+        />
         <Text
           style={{
             fontSize: 36,
@@ -164,7 +168,7 @@ export function ShareCard({
               marginTop: 8,
             }}
           >
-            🔥 {currentStreak} day streak
+            <Ionicons name="flame" size={16} color="#F59E0B" /> {currentStreak} day streak
           </Text>
         )}
       </View>

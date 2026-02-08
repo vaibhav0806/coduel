@@ -589,7 +589,7 @@ export default function HomeScreen() {
           </TextMedium>
           {streakFreezes > 0 && (
             <View className="flex-row items-center bg-dark-card border border-dark-border rounded-full px-3 py-1">
-              <Text className="text-base mr-1">❄️</Text>
+              <Ionicons name="snow" size={16} color="#67E8F9" style={{ marginRight: 4 }} />
               <TextSemibold className="text-cyan-300 text-xs">
                 {streakFreezes}
               </TextSemibold>
@@ -717,7 +717,7 @@ export default function HomeScreen() {
             {/* Streak */}
             <View className="items-center px-4">
               <TextBold style={{ fontSize: 16, color: "#FF6B35" }}>
-                🔥 {streak}
+                <Ionicons name="flame" size={16} color="#FF6B35" />{" "}{streak}
               </TextBold>
               <Text
                 className="text-gray-500 text-xs mt-0.5"
@@ -912,7 +912,7 @@ export default function HomeScreen() {
               {/* Header row */}
               <View className="flex-row items-center justify-between px-4 pt-3 pb-2">
                 <View className="flex-row items-center">
-                  <Text className="text-base mr-2">🏆</Text>
+                  <Ionicons name="trophy" size={16} color="#F59E0B" style={{ marginRight: 8 }} />
                   <TextBold className="text-white text-sm">
                     Weekly League
                   </TextBold>

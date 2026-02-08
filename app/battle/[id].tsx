@@ -1,4 +1,4 @@
-import { View, Text as RNText, Pressable } from "react-native";
+import { View, Text as RNText, Pressable, Modal } from "react-native";
 import { Text, TextBold, TextSemibold, TextMedium } from "@/components/ui/Text";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, router } from "expo-router";
@@ -67,6 +67,7 @@ export default function BattleScreen() {
   const { viewShotRef, isSharing, share } = useShareCard();
   const [promotionDismissed, setPromotionDismissed] = useState(false);
   const [showConfetti, setShowConfetti] = useState(false);
+  const [showForfeitModal, setShowForfeitModal] = useState(false);
 
   const battle = useBattle({
     matchId: id,
@@ -161,20 +162,42 @@ export default function BattleScreen() {
   // Loading + Countdown — unified "Get Ready" screen
   if (battle.phase === "loading" || battle.phase === "countdown") {
     return (
-      <SafeAreaView className="flex-1 bg-dark items-center justify-center">
-        <TextMedium className="text-gray-400 text-lg mb-4">
-          Round {battle.currentRound}
-        </TextMedium>
-        {battle.phase === "countdown" ? (
-          <Animated.View entering={ZoomIn.duration(300)}>
-            <TextBold className="text-8xl text-primary">
-              {battle.countdown}
-            </TextBold>
-          </Animated.View>
-        ) : (
-          <PulsingDots />
+      <SafeAreaView className="flex-1 bg-dark">
+        <ForfeitModal
+          visible={showForfeitModal}
+          onCancel={() => setShowForfeitModal(false)}
+          onForfeit={() => {
+            setShowForfeitModal(false);
+            battle.handleForfeit();
+          }}
+        />
+        {battle.phase === "countdown" && (
+          <View className="px-5 pt-3 pb-3">
+            <Pressable
+              onPress={() => setShowForfeitModal(true)}
+              hitSlop={10}
+              className="flex-row items-center self-start bg-dark-card border border-dark-border rounded-full px-4 py-2"
+            >
+              <Ionicons name="exit-outline" size={18} color="#9CA3AF" />
+              <Text className="text-gray-400 text-sm ml-2">Exit</Text>
+            </Pressable>
+          </View>
         )}
-        <TextMedium className="text-gray-400 text-lg mt-4">Get Ready!</TextMedium>
+        <View className="flex-1 items-center justify-center">
+          <TextMedium className="text-gray-400 text-lg mb-4">
+            Round {battle.currentRound}
+          </TextMedium>
+          {battle.phase === "countdown" ? (
+            <Animated.View entering={ZoomIn.duration(300)}>
+              <TextBold className="text-8xl text-primary">
+                {battle.countdown}
+              </TextBold>
+            </Animated.View>
+          ) : (
+            <PulsingDots />
+          )}
+          <TextMedium className="text-gray-400 text-lg mt-4">Get Ready!</TextMedium>
+        </View>
       </SafeAreaView>
     );
   }
@@ -262,7 +285,13 @@ export default function BattleScreen() {
               isWinner ? "text-win" : "text-lose"
             }`}
           >
-            {isWinner ? "VICTORY" : "DEFEAT"}
+            {battle.matchResult?.is_forfeit
+              ? isWinner
+                ? "FORFEIT WIN"
+                : "FORFEITED"
+              : isWinner
+              ? "VICTORY"
+              : "DEFEAT"}
           </Animated.Text>
 
           {/* Main Result Card */}
@@ -343,11 +372,20 @@ export default function BattleScreen() {
           </Animated.View>
         </View>
 
-        {/* Bottom Action Button */}
+        {/* Bottom Action Buttons */}
         <Animated.View
           entering={FadeInDown.delay(500).duration(400)}
           className="px-6 pb-6"
         >
+          <Pressable
+            onPress={() => router.push(`/match/${id}`)}
+            className="mb-3 border border-dark-border rounded-xl p-3.5 flex-row items-center justify-center active:opacity-70"
+          >
+            <Ionicons name="stats-chart-outline" size={18} color="#9CA3AF" />
+            <TextMedium className="text-gray-400 ml-2">Match Review</TextMedium>
+            <Ionicons name="chevron-forward" size={14} color="#4B5563" style={{ marginLeft: 4 }} />
+          </Pressable>
+
           <Pressable
             onPress={handleBattle}
             className="bg-dark-card border-2 border-primary rounded-2xl p-4 flex-row items-center justify-center active:bg-dark-elevated"
@@ -367,8 +405,50 @@ export default function BattleScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-dark">
+      <ForfeitModal
+        visible={showForfeitModal}
+        onCancel={() => setShowForfeitModal(false)}
+        onForfeit={() => {
+          setShowForfeitModal(false);
+          battle.handleForfeit();
+        }}
+      />
+
+      {/* Exit button — top left */}
+      <View className="px-5 pt-3 pb-3">
+        <Pressable
+          onPress={() => setShowForfeitModal(true)}
+          hitSlop={10}
+          className="flex-row items-center self-start bg-dark-card border border-dark-border rounded-full px-4 py-2"
+        >
+          <Ionicons name="exit-outline" size={18} color="#9CA3AF" />
+          <Text className="text-gray-400 text-sm ml-2">Exit</Text>
+        </Pressable>
+      </View>
+
+      {/* Opponent Forfeited Overlay */}
+      {battle.opponentForfeited && (
+        <View className="absolute inset-0 z-50 bg-black/80 items-center justify-center px-8">
+          <Animated.View entering={FadeIn.duration(300)} className="items-center">
+            <View className="w-16 h-16 rounded-full bg-dark-card border border-dark-border items-center justify-center mb-5">
+              <Ionicons name="exit-outline" size={28} color="#9CA3AF" />
+            </View>
+            <TextBold className="text-white text-xl mb-2">Opponent Forfeited</TextBold>
+            <Text className="text-gray-400 text-center text-sm mb-8">
+              {"Your opponent left the match.\nYou win by default."}
+            </Text>
+            <Pressable
+              onPress={() => battle.handleOpponentForfeitContinue()}
+              className="bg-dark-card border border-dark-border rounded-xl px-8 py-3.5"
+            >
+              <TextSemibold className="text-white">Continue</TextSemibold>
+            </Pressable>
+          </Animated.View>
+        </View>
+      )}
+
       {/* Header - Scores */}
-      <View className="flex-row justify-between items-center px-6 py-4">
+      <View className="flex-row justify-between items-center px-6 pb-3">
         <View className="items-center">
           <TextBold className="text-white">
             {battle.player?.username ?? "You"}
@@ -562,6 +642,57 @@ export default function BattleScreen() {
         </View>
       )}
     </SafeAreaView>
+  );
+}
+
+function ForfeitModal({
+  visible,
+  onCancel,
+  onForfeit,
+}: {
+  visible: boolean;
+  onCancel: () => void;
+  onForfeit: () => void;
+}) {
+  return (
+    <Modal
+      visible={visible}
+      transparent
+      animationType="fade"
+      statusBarTranslucent
+      onRequestClose={onCancel}
+    >
+      <Pressable
+        onPress={onCancel}
+        className="flex-1 bg-black/70 items-center justify-center px-8"
+      >
+        <Pressable
+          onPress={(e) => e.stopPropagation()}
+          className="w-full bg-dark-card border border-dark-border rounded-2xl overflow-hidden"
+        >
+          <View className="p-6">
+            <TextBold className="text-white text-lg mb-2">Forfeit Match?</TextBold>
+            <Text className="text-gray-400 text-sm leading-5">
+              You'll receive a loss and rating penalty. Your opponent wins.
+            </Text>
+          </View>
+          <View className="flex-row border-t border-dark-border">
+            <Pressable
+              onPress={onCancel}
+              className="flex-1 py-4 items-center border-r border-dark-border active:bg-dark-elevated"
+            >
+              <TextSemibold className="text-gray-400">Cancel</TextSemibold>
+            </Pressable>
+            <Pressable
+              onPress={onForfeit}
+              className="flex-1 py-4 items-center active:bg-dark-elevated"
+            >
+              <TextSemibold className="text-lose">Forfeit</TextSemibold>
+            </Pressable>
+          </View>
+        </Pressable>
+      </Pressable>
+    </Modal>
   );
 }
 

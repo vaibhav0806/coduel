@@ -3,7 +3,9 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { createClient } from "@supabase/supabase-js";
 import { Database } from "@/types/database";
 import { generateBotName, generateBotRating } from "@/lib/bot";
-import { getDifficultyForRating } from "@/lib/rating";
+import { getDifficultyForRating, calculateRatingChange, applyFloorProtection, getTierForRating } from "@/lib/rating";
+import { calculateStreakUpdate } from "@/lib/streak";
+import { calculateMatchXP, getLevelFromXP } from "@/lib/xp";
 
 const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || "YOUR_SUPABASE_URL";
 const supabaseAnonKey =
@@ -645,6 +647,168 @@ export async function checkBothAnswered(matchId: string, roundNumber: number) {
     .eq("round_number", roundNumber)
     .single();
   return data?.player1_answer !== null && data?.player2_answer !== null;
+}
+
+// --- Forfeit (direct DB) ---
+
+export async function forfeitMatch(
+  matchId: string,
+  quitterId: string
+): Promise<{
+  rating_change: number;
+  opponent_rating_change: number;
+  new_rating: number;
+  xp_earned: number;
+  new_level: number;
+  leveled_up: boolean;
+}> {
+  // 1. Fetch match
+  const { data: match, error: matchErr } = await supabase
+    .from("matches")
+    .select("*")
+    .eq("id", matchId)
+    .single();
+
+  if (matchErr || !match) throw new Error("Match not found");
+
+  const isP1 = match.player1_id === quitterId;
+  const opponentId = isP1 ? match.player2_id : match.player1_id;
+
+  // 2. Fetch both profiles
+  const { data: quitterProfile } = await supabase
+    .from("profiles")
+    .select("rating, wins, losses, current_streak, best_streak, last_battle_date, streak_freezes, xp, level, tier")
+    .eq("id", quitterId)
+    .single();
+
+  if (!quitterProfile) throw new Error("Quitter profile not found");
+
+  let opponentProfile: typeof quitterProfile | null = null;
+  if (opponentId && !match.is_bot_match) {
+    const { data } = await supabase
+      .from("profiles")
+      .select("rating, wins, losses, current_streak, best_streak, last_battle_date, streak_freezes, xp, level, tier")
+      .eq("id", opponentId)
+      .single();
+    opponentProfile = data;
+  }
+
+  // 3. Calculate rating changes (quitter = loser, opponent = winner)
+  const oppRating = opponentProfile?.rating ?? quitterProfile.rating;
+  const { winnerDelta, loserDelta } = calculateRatingChange(
+    oppRating,
+    quitterProfile.rating,
+    false // no comeback on forfeit
+  );
+
+  // 4. Update match record
+  const p1Score = match.player1_score;
+  const p2Score = match.player2_score;
+  await supabase
+    .from("matches")
+    .update({
+      winner_id: opponentId && opponentId !== "bot" ? opponentId : null,
+      forfeited_by: quitterId,
+      player1_score: p1Score,
+      player2_score: p2Score,
+      player1_rating_change: isP1 ? loserDelta : winnerDelta,
+      player2_rating_change: isP1 ? winnerDelta : loserDelta,
+      ended_at: new Date().toISOString(),
+    })
+    .eq("id", matchId);
+
+  // 5. Update quitter's profile (loss)
+  const quitterXP = calculateMatchXP(false);
+  const quitterNewRating = match.is_ranked
+    ? applyFloorProtection(quitterProfile.rating, quitterProfile.rating + loserDelta)
+    : quitterProfile.rating;
+  const quitterNewTier = getTierForRating(quitterNewRating);
+  const quitterStreak = calculateStreakUpdate({
+    current_streak: quitterProfile.current_streak,
+    best_streak: quitterProfile.best_streak,
+    last_battle_date: quitterProfile.last_battle_date,
+    streak_freezes: quitterProfile.streak_freezes,
+  });
+  const quitterNewXP = (quitterProfile.xp ?? 0) + quitterXP.totalXP;
+  const quitterLevelInfo = getLevelFromXP(quitterNewXP);
+  const quitterLeveledUp = quitterLevelInfo.level > (quitterProfile.level ?? 1);
+
+  const quitterUpdate: Record<string, any> = {
+    xp: quitterNewXP,
+    level: quitterLevelInfo.level,
+    ...quitterStreak,
+  };
+  if (match.is_ranked) {
+    quitterUpdate.rating = quitterNewRating;
+    quitterUpdate.tier = quitterNewTier;
+    quitterUpdate.wins = quitterProfile.wins;
+    quitterUpdate.losses = (quitterProfile.losses ?? 0) + 1;
+  }
+  await supabase.from("profiles").update(quitterUpdate).eq("id", quitterId);
+
+  // 6. Update opponent's profile (win) — skip for bot matches
+  if (opponentId && !match.is_bot_match && opponentProfile) {
+    const oppNewRating = match.is_ranked
+      ? applyFloorProtection(opponentProfile.rating, opponentProfile.rating + winnerDelta)
+      : opponentProfile.rating;
+    const oppNewTier = getTierForRating(oppNewRating);
+    const oppXP = calculateMatchXP(true);
+    const oppStreak = calculateStreakUpdate({
+      current_streak: opponentProfile.current_streak,
+      best_streak: opponentProfile.best_streak,
+      last_battle_date: opponentProfile.last_battle_date,
+      streak_freezes: opponentProfile.streak_freezes,
+    });
+    const oppNewXP = (opponentProfile.xp ?? 0) + oppXP.totalXP;
+    const oppLevelInfo = getLevelFromXP(oppNewXP);
+
+    const oppUpdate: Record<string, any> = {
+      xp: oppNewXP,
+      level: oppLevelInfo.level,
+      ...oppStreak,
+    };
+    if (match.is_ranked) {
+      oppUpdate.rating = oppNewRating;
+      oppUpdate.tier = oppNewTier;
+      oppUpdate.wins = (opponentProfile.wins ?? 0) + 1;
+      oppUpdate.losses = opponentProfile.losses;
+    }
+    await supabase.from("profiles").update(oppUpdate).eq("id", opponentId);
+  }
+
+  // 7. Award league points
+  if (match.is_ranked) {
+    await awardLeaguePoints(quitterId, false);
+    if (opponentId && !match.is_bot_match) {
+      await awardLeaguePoints(opponentId, true);
+    }
+  }
+
+  // 8. Broadcast opponent_forfeited so opponent's client picks it up
+  if (opponentId && !match.is_bot_match) {
+    const channel = supabase.channel(`battle:${matchId}`);
+    await channel.send({
+      type: "broadcast",
+      event: "opponent_forfeited",
+      payload: {
+        forfeited_by: quitterId,
+        rating_change: winnerDelta,
+        new_rating: opponentProfile
+          ? applyFloorProtection(opponentProfile.rating, opponentProfile.rating + winnerDelta)
+          : 0,
+      },
+    });
+    supabase.removeChannel(channel);
+  }
+
+  return {
+    rating_change: match.is_ranked ? loserDelta : 0,
+    opponent_rating_change: match.is_ranked ? winnerDelta : 0,
+    new_rating: quitterNewRating,
+    xp_earned: quitterXP.totalXP,
+    new_level: quitterLevelInfo.level,
+    leveled_up: quitterLeveledUp,
+  };
 }
 
 // --- League points (direct DB, no edge function) ---

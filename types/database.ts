@@ -122,6 +122,7 @@ export interface Database {
           is_ranked: boolean;
           started_at: string;
           ended_at: string;
+          forfeited_by: string | null;
         };
         Insert: {
           id?: string;
@@ -136,6 +137,7 @@ export interface Database {
           is_ranked?: boolean;
           started_at?: string;
           ended_at?: string;
+          forfeited_by?: string | null;
         };
         Update: {
           id?: string;
@@ -150,6 +152,7 @@ export interface Database {
           is_ranked?: boolean;
           started_at?: string;
           ended_at?: string;
+          forfeited_by?: string | null;
         };
         Relationships: [
           {

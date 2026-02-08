@@ -37,6 +37,7 @@ interface MatchDetail {
   ratingChange: number | null;
   won: boolean;
   isBotMatch: boolean;
+  forfeitedBy: string | null;
 }
 
 function ReviewSkeleton() {
@@ -159,6 +160,7 @@ export default function MatchReviewScreen() {
         ratingChange: isP1 ? match.player1_rating_change : match.player2_rating_change,
         won: match.winner_id === userId,
         isBotMatch: match.is_bot_match,
+        forfeitedBy: match.forfeited_by,
       });
     } catch (err) {
       console.error("Failed to fetch match detail:", err);
@@ -194,8 +196,10 @@ export default function MatchReviewScreen() {
     );
   }
 
-  const { match, rounds, opponentName, opponentRating, playerScore, opponentScore, ratingChange, won, isBotMatch } = detail;
+  const { match, rounds, opponentName, opponentRating, playerScore, opponentScore, ratingChange, won, isBotMatch, forfeitedBy } = detail;
   const totalRounds = rounds.length;
+  const isForfeit = forfeitedBy !== null;
+  const playerForfeited = forfeitedBy === userId;
 
   return (
     <SafeAreaView className="flex-1 bg-dark" edges={["top"]}>
@@ -235,8 +239,19 @@ export default function MatchReviewScreen() {
                 letterSpacing: 2,
               }}
             >
-              {won ? "VICTORY" : "DEFEAT"}
+              {isForfeit
+                ? won
+                  ? "FORFEIT WIN"
+                  : "FORFEITED"
+                : won
+                ? "VICTORY"
+                : "DEFEAT"}
             </TextBold>
+            {isForfeit && (
+              <Text className="text-gray-500 mt-1" style={{ fontSize: 12 }}>
+                {playerForfeited ? "You forfeited" : "Opponent forfeited"}
+              </Text>
+            )}
 
             {/* Score */}
             <View className="flex-row items-center mt-3">
