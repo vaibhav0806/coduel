@@ -329,6 +329,8 @@ export default function LeaderboardScreen() {
           const size = sizes[col];
           const height = heights[col];
 
+          const isPlaceholder = item.id.startsWith("placeholder-");
+
           return (
             <Animated.View
               key={item.id}
@@ -336,64 +338,74 @@ export default function LeaderboardScreen() {
               className="flex-1 items-center"
               style={{ minHeight: height }}
             >
-              {/* Avatar */}
-              <View
-                style={{
-                  width: size,
-                  height: size,
-                  borderRadius: size / 2,
-                  borderWidth: 2.5,
-                  borderColor: rankColor,
-                  backgroundColor: "#0A0A0F",
-                  alignItems: "center",
-                  justifyContent: "center",
+              <Pressable
+                onPress={() => {
+                  if (!isPlaceholder) {
+                    router.push({ pathname: "/user/[id]", params: { id: item.id } });
+                  }
                 }}
+                disabled={isPlaceholder}
+                className="items-center"
               >
-                <TextBold style={{ fontSize: size * 0.38, color: rankColor }}>
-                  {(item.username?.[0] ?? "?").toUpperCase()}
-                </TextBold>
-                {/* Rank badge */}
+                {/* Avatar */}
                 <View
                   style={{
-                    position: "absolute",
-                    bottom: -4,
-                    right: -4,
-                    width: 20,
-                    height: 20,
-                    borderRadius: 10,
-                    overflow: "hidden",
+                    width: size,
+                    height: size,
+                    borderRadius: size / 2,
+                    borderWidth: 2.5,
+                    borderColor: rankColor,
+                    backgroundColor: "#0A0A0F",
+                    alignItems: "center",
+                    justifyContent: "center",
                   }}
                 >
-                  <LinearGradient
-                    colors={[rankColor, rankColor + "88"]}
+                  <TextBold style={{ fontSize: size * 0.38, color: rankColor }}>
+                    {(item.username?.[0] ?? "?").toUpperCase()}
+                  </TextBold>
+                  {/* Rank badge */}
+                  <View
                     style={{
+                      position: "absolute",
+                      bottom: -4,
+                      right: -4,
                       width: 20,
                       height: 20,
-                      alignItems: "center",
-                      justifyContent: "center",
+                      borderRadius: 10,
+                      overflow: "hidden",
                     }}
                   >
-                    <TextBold style={{ fontSize: 10, color: "#050508" }}>
-                      {idx + 1}
-                    </TextBold>
-                  </LinearGradient>
+                    <LinearGradient
+                      colors={[rankColor, rankColor + "88"]}
+                      style={{
+                        width: 20,
+                        height: 20,
+                        alignItems: "center",
+                        justifyContent: "center",
+                      }}
+                    >
+                      <TextBold style={{ fontSize: 10, color: "#050508" }}>
+                        {idx + 1}
+                      </TextBold>
+                    </LinearGradient>
+                  </View>
                 </View>
-              </View>
 
-              {/* Name & Rating */}
-              <Text
-                className="text-white mt-2"
-                style={{ fontSize: 12 }}
-                numberOfLines={1}
-              >
-                {item.username}
-              </Text>
-              <TextBold className="text-white" style={{ fontSize: 14 }}>
-                {item.rating}
-              </TextBold>
-              <Text className="text-gray-500" style={{ fontSize: 9, letterSpacing: 0.5 }}>
-                {activeTab === "global" ? "RATING" : "PTS"}
-              </Text>
+                {/* Name & Rating */}
+                <Text
+                  className="text-white mt-2"
+                  style={{ fontSize: 12 }}
+                  numberOfLines={1}
+                >
+                  {item.username}
+                </Text>
+                <TextBold className="text-white" style={{ fontSize: 14 }}>
+                  {item.rating}
+                </TextBold>
+                <Text className="text-gray-500" style={{ fontSize: 9, letterSpacing: 0.5 }}>
+                  {activeTab === "global" ? "RATING" : "PTS"}
+                </Text>
+              </Pressable>
             </Animated.View>
           );
         })}
@@ -445,8 +457,17 @@ export default function LeaderboardScreen() {
   const renderListItem = ({ item, index }: { item: LeaderboardEntry; index: number }) => {
     const isCurrentUser = item.id === user?.id;
     const itemTierConfig = getTierConfig(item.rating);
+    const isPlaceholder = item.id.startsWith("placeholder-");
 
     return (
+      <Pressable
+        onPress={() => {
+          if (!isPlaceholder) {
+            router.push({ pathname: "/user/[id]", params: { id: item.id } });
+          }
+        }}
+        disabled={isPlaceholder}
+      >
       <Animated.View
         entering={FadeInDown.delay(Math.min(index, 15) * 30 + 100).duration(300)}
         className="mx-6 mb-2"
@@ -526,6 +547,7 @@ export default function LeaderboardScreen() {
           </View>
         </View>
       </Animated.View>
+      </Pressable>
     );
   };
 
@@ -560,9 +582,8 @@ export default function LeaderboardScreen() {
         entering={FadeIn.duration(300)}
         className="flex-row items-center px-6 pt-3 pb-2"
       >
-        <Ionicons name="trophy" size={20} color="#39FF14" />
-        <TextBold className="text-white ml-2" style={{ fontSize: 20 }}>
-          Ranks
+        <TextBold className="text-white" style={{ fontSize: 20 }}>
+          Leaderboard
         </TextBold>
       </Animated.View>
 

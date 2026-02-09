@@ -302,6 +302,42 @@ export interface Database {
           },
         ];
       };
+      follows: {
+        Row: {
+          id: string;
+          follower_id: string;
+          following_id: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          follower_id: string;
+          following_id: string;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          follower_id?: string;
+          following_id?: string;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "follows_follower_id_fkey";
+            columns: ["follower_id"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "follows_following_id_fkey";
+            columns: ["following_id"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       league_memberships: {
         Row: {
           id: string;
@@ -355,6 +391,7 @@ export type MatchRound = Database["public"]["Tables"]["match_rounds"]["Row"];
 export type MatchQueue = Database["public"]["Tables"]["match_queue"]["Row"];
 export type LeagueMembership =
   Database["public"]["Tables"]["league_memberships"]["Row"];
+export type Follow = Database["public"]["Tables"]["follows"]["Row"];
 
 // Tier type
 export type Tier = "bronze" | "silver" | "gold" | "diamond";

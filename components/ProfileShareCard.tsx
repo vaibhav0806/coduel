@@ -289,7 +289,7 @@ export function ProfileShareCard({
               letterSpacing: 0.5,
             }}
           >
-            Can you beat me? — coduel.app
+            Can you beat me? — gitgud.app
           </RNText>
         </View>
       </View>

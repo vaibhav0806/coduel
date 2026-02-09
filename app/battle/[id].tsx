@@ -428,9 +428,21 @@ export default function BattleScreen() {
                 </View>
                 <View className="w-px h-16 bg-dark-border" />
                 <View className="items-center ml-8">
-                  <Text className="text-gray-500 text-xs uppercase mb-1">
-                    {battle.opponent?.username ?? "Opponent"}
-                  </Text>
+                  <Pressable
+                    onPress={() => {
+                      if (battle.opponent?.id && isBotMatch !== "true") {
+                        router.push({ pathname: "/user/[id]", params: { id: battle.opponent.id } });
+                      }
+                    }}
+                    disabled={!battle.opponent?.id || isBotMatch === "true"}
+                  >
+                    <Text
+                      className="text-xs uppercase mb-1"
+                      style={{ color: battle.opponent?.id && isBotMatch !== "true" ? "#39FF14" : "#6B7280" }}
+                    >
+                      {battle.opponent?.username ?? "Opponent"}
+                    </Text>
+                  </Pressable>
                   <TextBold className={`text-5xl ${isDraw ? "text-white" : !isWinner ? "text-lose" : "text-white"}`}>
                     {opponentScore}
                   </TextBold>

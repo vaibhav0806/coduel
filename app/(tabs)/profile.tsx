@@ -21,11 +21,13 @@ import { getTierConfig } from "@/lib/rating";
 import { Skeleton, useSkeletonAnimation } from "@/components/ui/Skeleton";
 import { ProfileShareCard } from "@/components/ProfileShareCard";
 import { useShareCard } from "@/hooks/useShareCard";
+import { useFollow } from "@/hooks/useFollow";
 
 interface MatchHistoryItem {
   id: string;
   opponentName: string;
   opponentRating: number | null;
+  opponentId: string | null;
   playerScore: number;
   opponentScore: number;
   ratingChange: number | null;
@@ -167,6 +169,7 @@ function ProfileSkeleton() {
 export default function ProfileScreen() {
   const { user, profile, refreshProfile } = useAuth();
   const { viewShotRef, isSharing, share } = useShareCard();
+  const { followerCount, followingCount, refetch: refetchFollow } = useFollow(user?.id);
   const [matchHistory, setMatchHistory] = useState<MatchHistoryItem[]>([]);
   const [globalRank, setGlobalRank] = useState<number | null>(null);
   const [loadingHistory, setLoadingHistory] = useState(true);
@@ -177,6 +180,7 @@ export default function ProfileScreen() {
   useFocusEffect(
     useCallback(() => {
       refreshProfile();
+      refetchFollow();
       if (user) {
         fetchMatchHistory(user.id);
         fetchGlobalRank();
@@ -188,6 +192,7 @@ export default function ProfileScreen() {
     setRefreshing(true);
     await Promise.all([
       refreshProfile(),
+      refetchFollow(),
       user ? fetchMatchHistory(user.id) : Promise.resolve(),
       fetchGlobalRank(),
     ]);
@@ -263,6 +268,7 @@ export default function ProfileScreen() {
           id: m.id,
           opponentName,
           opponentRating,
+          opponentId: m.is_bot_match ? null : (opponentId ?? null),
           playerScore,
           opponentScore,
           ratingChange,
@@ -470,6 +476,24 @@ export default function ProfileScreen() {
                   {tierConfig.label.toUpperCase()}
                 </TextBold>
               </LinearGradient>
+            </View>
+            <View className="flex-row items-center mt-1.5" style={{ gap: 12 }}>
+              <View className="flex-row items-center">
+                <TextSemibold className="text-white" style={{ fontSize: 12 }}>
+                  {followerCount}
+                </TextSemibold>
+                <Text className="text-gray-500 ml-1" style={{ fontSize: 11 }}>
+                  {followerCount === 1 ? "Follower" : "Followers"}
+                </Text>
+              </View>
+              <View className="flex-row items-center">
+                <TextSemibold className="text-white" style={{ fontSize: 12 }}>
+                  {followingCount}
+                </TextSemibold>
+                <Text className="text-gray-500 ml-1" style={{ fontSize: 11 }}>
+                  Following
+                </Text>
+              </View>
             </View>
           </View>
         </Animated.View>
@@ -709,6 +733,18 @@ export default function ProfileScreen() {
                           <Text className="text-gray-500" style={{ fontSize: 12, marginLeft: 6 }}>
                             {match.opponentRating}
                           </Text>
+                        )}
+                        {match.opponentId && (
+                          <Pressable
+                            onPress={(e) => {
+                              e.stopPropagation();
+                              router.push({ pathname: "/user/[id]", params: { id: match.opponentId! } });
+                            }}
+                            hitSlop={8}
+                            style={{ marginLeft: 6 }}
+                          >
+                            <Ionicons name="person-circle-outline" size={16} color="#39FF14" />
+                          </Pressable>
                         )}
                       </View>
                       <Text className="text-gray-500" style={{ fontSize: 11, marginTop: 2 }}>

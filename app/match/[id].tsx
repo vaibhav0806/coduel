@@ -32,6 +32,7 @@ interface MatchDetail {
   rounds: MatchDetailRound[];
   opponentName: string;
   opponentRating: number | null;
+  opponentId: string | null;
   playerScore: number;
   opponentScore: number;
   ratingChange: number | null;
@@ -155,6 +156,7 @@ export default function MatchReviewScreen() {
         rounds: detailRounds,
         opponentName,
         opponentRating,
+        opponentId: match.is_bot_match ? null : (opponentId ?? null),
         playerScore: isP1 ? match.player1_score : match.player2_score,
         opponentScore: isP1 ? match.player2_score : match.player1_score,
         ratingChange: isP1 ? match.player1_rating_change : match.player2_rating_change,
@@ -198,7 +200,7 @@ export default function MatchReviewScreen() {
     );
   }
 
-  const { match, rounds, opponentName, opponentRating, playerScore, opponentScore, ratingChange, result, isBotMatch, forfeitedBy } = detail;
+  const { match, rounds, opponentName, opponentRating, opponentId, playerScore, opponentScore, ratingChange, result, isBotMatch, forfeitedBy } = detail;
   const totalRounds = rounds.length;
   const won = result === "win";
   const isForfeit = forfeitedBy !== null;
@@ -290,8 +292,21 @@ export default function MatchReviewScreen() {
             </View>
 
             {/* Opponent */}
-            <View className="flex-row items-center mt-3">
-              <Text className="text-gray-400" style={{ fontSize: 14 }}>
+            <Pressable
+              onPress={() => {
+                if (opponentId) {
+                  router.push({ pathname: "/user/[id]", params: { id: opponentId } });
+                }
+              }}
+              disabled={!opponentId}
+              className="flex-row items-center mt-3"
+            >
+              <Text
+                style={{
+                  fontSize: 14,
+                  color: opponentId ? "#39FF14" : "#9CA3AF",
+                }}
+              >
                 vs {opponentName}
               </Text>
               {isBotMatch && (
@@ -307,7 +322,7 @@ export default function MatchReviewScreen() {
                   {opponentRating}
                 </Text>
               )}
-            </View>
+            </Pressable>
 
             {/* Rating change pill */}
             {ratingChange != null && ratingChange !== 0 && (
