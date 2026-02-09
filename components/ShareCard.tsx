@@ -1,19 +1,40 @@
-import { View, Text } from "react-native";
+import { View, Text as RNText } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 
-const tierColors: Record<string, [string, string]> = {
-  bronze: ["#CD7F32", "#8B4513"],
-  silver: ["#C0C0C0", "#808080"],
-  gold: ["#FFD700", "#DAA520"],
-  diamond: ["#B9F2FF", "#4169E1"],
-};
-
-const tierNames: Record<string, string> = {
-  bronze: "Bronze",
-  silver: "Silver",
-  gold: "Gold",
-  diamond: "Diamond",
+const tierThemes: Record<
+  string,
+  {
+    label: string;
+    colors: [string, string, string];
+    accent: string;
+    glow: string;
+  }
+> = {
+  bronze: {
+    label: "BRONZE",
+    colors: ["#CD7F32", "#A0522D", "#8B4513"],
+    accent: "#CD7F32",
+    glow: "rgba(205,127,50,0.25)",
+  },
+  silver: {
+    label: "SILVER",
+    colors: ["#E8E8E8", "#A8A8A8", "#808080"],
+    accent: "#C0C0C0",
+    glow: "rgba(192,192,192,0.25)",
+  },
+  gold: {
+    label: "GOLD",
+    colors: ["#FFD700", "#F0C040", "#DAA520"],
+    accent: "#FFD700",
+    glow: "rgba(255,215,0,0.25)",
+  },
+  diamond: {
+    label: "DIAMOND",
+    colors: ["#B9F2FF", "#7EC8E3", "#4169E1"],
+    accent: "#B9F2FF",
+    glow: "rgba(185,242,255,0.25)",
+  },
 };
 
 interface ShareCardProps {
@@ -39,145 +60,307 @@ export function ShareCard({
   currentStreak,
   isComeback,
 }: ShareCardProps) {
+  const theme = tierThemes[tier] ?? tierThemes.bronze;
+  const resultColor = isWinner ? "#39FF14" : "#EF4444";
+  const resultBg = isWinner
+    ? "rgba(57,255,20,0.06)"
+    : "rgba(239,68,68,0.06)";
+
   return (
     <View
       style={{
         width: 360,
-        height: 480,
-        backgroundColor: "#0F0F1A",
-        borderRadius: 24,
-        padding: 24,
-        justifyContent: "space-between",
+        backgroundColor: "#08080D",
+        borderRadius: 20,
+        overflow: "hidden",
       }}
     >
-      {/* Header */}
-      <View style={{ alignItems: "center" }}>
-        <Text
-          style={{
-            color: "#39FF14",
-            fontSize: 28,
-            fontWeight: "800",
-            letterSpacing: 4,
-          }}
-        >
-          CODUEL
-        </Text>
-      </View>
+      {/* === Top accent bar — tier gradient === */}
+      <LinearGradient
+        colors={theme.colors}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 0 }}
+        style={{ height: 4 }}
+      />
 
-      {/* Result */}
-      <View style={{ alignItems: "center" }}>
-        <Ionicons
-          name={isWinner ? "trophy" : "sad-outline"}
-          size={48}
-          color={isWinner ? "#F59E0B" : "#EF4444"}
-          style={{ marginBottom: 4 }}
-        />
-        <Text
+      {/* === Inner content === */}
+      <View style={{ padding: 28, paddingTop: 24, paddingBottom: 24 }}>
+        {/* Header row: CODUEL + tier badge */}
+        <View
           style={{
-            fontSize: 36,
-            fontWeight: "800",
-            color: isWinner ? "#10B981" : "#EF4444",
-            marginBottom: 8,
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "space-between",
+            marginBottom: 28,
           }}
         >
-          {isWinner ? "VICTORY" : "DEFEAT"}
-        </Text>
-        <Text
-          style={{
-            color: "#FFFFFF",
-            fontSize: 20,
-            fontWeight: "600",
-          }}
-        >
-          {playerUsername}
-        </Text>
-        <Text
-          style={{
-            color: "#FFFFFF",
-            fontSize: 32,
-            fontWeight: "700",
-            marginTop: 4,
-          }}
-        >
-          {playerScore} - {opponentScore}
-        </Text>
+          <RNText
+            style={{
+              fontFamily: "Teko_700Bold",
+              fontSize: 22,
+              color: "#FFFFFF",
+              letterSpacing: 6,
+              lineHeight: 24,
+            }}
+          >
+            CODUEL
+          </RNText>
+          <LinearGradient
+            colors={theme.colors}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            style={{
+              borderRadius: 10,
+              paddingHorizontal: 10,
+              paddingVertical: 3,
+            }}
+          >
+            <RNText
+              style={{
+                fontFamily: "Outfit_700Bold",
+                fontSize: 9,
+                color: "#08080D",
+                letterSpacing: 1.5,
+              }}
+            >
+              {theme.label}
+            </RNText>
+          </LinearGradient>
+        </View>
 
-        {isComeback && (
+        {/* Result headline */}
+        <View style={{ alignItems: "center", marginBottom: 24 }}>
+          <RNText
+            style={{
+              fontFamily: "Teko_700Bold",
+              fontSize: 52,
+              color: resultColor,
+              letterSpacing: 6,
+              lineHeight: 56,
+            }}
+          >
+            {isWinner ? "VICTORY" : "DEFEAT"}
+          </RNText>
+
+          {isComeback && (
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                marginTop: 4,
+              }}
+            >
+              <Ionicons name="flash" size={12} color="#F59E0B" />
+              <RNText
+                style={{
+                  fontFamily: "Outfit_600SemiBold",
+                  fontSize: 11,
+                  color: "#F59E0B",
+                  letterSpacing: 1.5,
+                  marginLeft: 4,
+                }}
+              >
+                CLUTCH COMEBACK
+              </RNText>
+            </View>
+          )}
+        </View>
+
+        {/* Score block */}
+        <View
+          style={{
+            backgroundColor: resultBg,
+            borderRadius: 14,
+            borderWidth: 1,
+            borderColor: isWinner
+              ? "rgba(57,255,20,0.1)"
+              : "rgba(239,68,68,0.1)",
+            padding: 20,
+            alignItems: "center",
+            marginBottom: 24,
+          }}
+        >
+          {/* Username */}
+          <RNText
+            style={{
+              fontFamily: "Outfit_500Medium",
+              fontSize: 13,
+              color: "#6B7280",
+              letterSpacing: 0.5,
+              marginBottom: 12,
+            }}
+          >
+            @{playerUsername}
+          </RNText>
+
+          {/* Big score */}
           <View
             style={{
-              backgroundColor: "rgba(245, 158, 11, 0.2)",
-              paddingHorizontal: 16,
-              paddingVertical: 4,
-              borderRadius: 999,
-              marginTop: 8,
+              flexDirection: "row",
+              alignItems: "baseline",
             }}
           >
-            <Text
-              style={{ color: "#F59E0B", fontWeight: "700", fontSize: 14 }}
+            <RNText
+              style={{
+                fontFamily: "Teko_700Bold",
+                fontSize: 72,
+                color: "#FFFFFF",
+                lineHeight: 72,
+              }}
             >
-              Clutch!
-            </Text>
+              {playerScore}
+            </RNText>
+            <RNText
+              style={{
+                fontFamily: "Outfit_500Medium",
+                fontSize: 20,
+                color: "#3A3A44",
+                marginHorizontal: 12,
+                lineHeight: 72,
+              }}
+            >
+              -
+            </RNText>
+            <RNText
+              style={{
+                fontFamily: "Teko_700Bold",
+                fontSize: 72,
+                color: "#3A3A44",
+                lineHeight: 72,
+              }}
+            >
+              {opponentScore}
+            </RNText>
           </View>
-        )}
-      </View>
+        </View>
 
-      {/* Rating & Tier */}
-      <View style={{ alignItems: "center" }}>
-        <LinearGradient
-          colors={tierColors[tier] ?? tierColors.bronze}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
+        {/* Stats row */}
+        <View
           style={{
-            paddingHorizontal: 16,
-            paddingVertical: 4,
-            borderRadius: 999,
-            marginBottom: 8,
+            flexDirection: "row",
+            justifyContent: "center",
+            alignItems: "center",
+            marginBottom: 28,
           }}
         >
-          <Text style={{ color: "#FFFFFF", fontWeight: "700", fontSize: 13 }}>
-            {tierNames[tier] ?? "Bronze"}
-          </Text>
-        </LinearGradient>
+          {/* Rating */}
+          <View style={{ alignItems: "center", paddingHorizontal: 20 }}>
+            <RNText
+              style={{
+                fontFamily: "Outfit_700Bold",
+                fontSize: 26,
+                color: "#FFFFFF",
+                lineHeight: 30,
+              }}
+            >
+              {rating.toLocaleString()}
+            </RNText>
+            {ratingChange !== 0 && (
+              <RNText
+                style={{
+                  fontFamily: "Outfit_600SemiBold",
+                  fontSize: 13,
+                  color: ratingChange > 0 ? "#39FF14" : "#EF4444",
+                  marginTop: 2,
+                }}
+              >
+                {ratingChange > 0 ? "+" : ""}
+                {ratingChange}
+              </RNText>
+            )}
+            <RNText
+              style={{
+                fontFamily: "Outfit_400Regular",
+                fontSize: 10,
+                color: "#4B5563",
+                letterSpacing: 1.5,
+                marginTop: 4,
+              }}
+            >
+              RATING
+            </RNText>
+          </View>
 
-        <Text
-          style={{ color: "#FFFFFF", fontSize: 40, fontWeight: "800" }}
+          {/* Divider */}
+          {currentStreak > 0 && (
+            <>
+              <View
+                style={{
+                  width: 1,
+                  height: 32,
+                  backgroundColor: "rgba(255,255,255,0.08)",
+                }}
+              />
+
+              {/* Streak */}
+              <View style={{ alignItems: "center", paddingHorizontal: 20 }}>
+                <View
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                  }}
+                >
+                  <Ionicons
+                    name="flame"
+                    size={20}
+                    color="#FF6B35"
+                    style={{ marginRight: 4 }}
+                  />
+                  <RNText
+                    style={{
+                      fontFamily: "Outfit_700Bold",
+                      fontSize: 26,
+                      color: "#FFFFFF",
+                      lineHeight: 30,
+                    }}
+                  >
+                    {currentStreak}
+                  </RNText>
+                </View>
+                <RNText
+                  style={{
+                    fontFamily: "Outfit_400Regular",
+                    fontSize: 10,
+                    color: "#4B5563",
+                    letterSpacing: 1.5,
+                    marginTop: 4,
+                  }}
+                >
+                  STREAK
+                </RNText>
+              </View>
+            </>
+          )}
+        </View>
+
+        {/* Footer CTA */}
+        <View
+          style={{
+            borderTopWidth: 1,
+            borderTopColor: "rgba(255,255,255,0.06)",
+            paddingTop: 16,
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
         >
-          {rating}
-        </Text>
-
-        {ratingChange !== 0 && (
-          <Text
+          <Ionicons
+            name="code-slash"
+            size={14}
+            color="#3A3A44"
+            style={{ marginRight: 8 }}
+          />
+          <RNText
             style={{
-              color: ratingChange > 0 ? "#10B981" : "#EF4444",
-              fontSize: 18,
-              fontWeight: "700",
-              marginTop: 4,
+              fontFamily: "Outfit_500Medium",
+              fontSize: 12,
+              color: "#3A3A44",
+              letterSpacing: 0.5,
             }}
           >
-            {ratingChange > 0 ? "+" : ""}
-            {ratingChange} Rating
-          </Text>
-        )}
-
-        {currentStreak > 0 && (
-          <Text
-            style={{
-              color: "#F59E0B",
-              fontSize: 16,
-              fontWeight: "600",
-              marginTop: 8,
-            }}
-          >
-            <Ionicons name="flame" size={16} color="#F59E0B" /> {currentStreak} day streak
-          </Text>
-        )}
-      </View>
-
-      {/* Footer CTA */}
-      <View style={{ alignItems: "center" }}>
-        <Text style={{ color: "#6B7280", fontSize: 14, fontWeight: "500" }}>
-          Think you can beat me?
-        </Text>
+            Think you can beat me?
+          </RNText>
+        </View>
       </View>
     </View>
   );

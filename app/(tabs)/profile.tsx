@@ -191,11 +191,18 @@ export default function ProfileScreen() {
   }, [user]);
 
   const fetchGlobalRank = async () => {
-    if (!profile) return;
+    if (!user) return;
+    // Fetch current rating directly from DB to avoid stale profile data
+    const { data: fresh } = await supabase
+      .from("profiles")
+      .select("rating")
+      .eq("id", user.id)
+      .single();
+    if (!fresh) return;
     const { count } = await supabase
       .from("profiles")
       .select("id", { count: "exact", head: true })
-      .gt("rating", profile.rating);
+      .gt("rating", fresh.rating);
     setGlobalRank((count ?? 0) + 1);
   };
 

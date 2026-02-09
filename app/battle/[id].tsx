@@ -90,7 +90,7 @@ export default function BattleScreen() {
       timerWidth.value = 100;
       timerWidth.value = withTiming(0, { duration: 15000 });
     } else {
-      // Stop animation on any other phase (result, explanation, etc.)
+      // Stop animation on any other phase
       cancelAnimation(timerWidth);
       if (battle.phase === "countdown") {
         timerWidth.value = 100;
@@ -105,11 +105,24 @@ export default function BattleScreen() {
     }
   }, [battle.selectedAnswer]);
 
-  // Auto-show explanation after result
+  // Auto-advance progress bar animation
+  const autoAdvanceProgress = useSharedValue(0);
+
+  const autoAdvanceBarStyle = useAnimatedStyle(() => ({
+    width: `${autoAdvanceProgress.value}%`,
+  }));
+
   useEffect(() => {
     if (battle.phase === "result") {
-      const timer = setTimeout(() => battle.showExplanation(), 800);
-      return () => clearTimeout(timer);
+      cancelAnimation(autoAdvanceProgress);
+      autoAdvanceProgress.value = 0;
+      // Match the durations from useBattle: 1.5s if answered, 4s if timed out, 2s if match over
+      const isMatchOver = battle.currentRound >= battle.totalRounds;
+      const duration = isMatchOver ? 2000 : battle.timedOut ? 4000 : 3000;
+      autoAdvanceProgress.value = withTiming(100, { duration, easing: Easing.linear });
+    } else {
+      cancelAnimation(autoAdvanceProgress);
+      autoAdvanceProgress.value = 0;
     }
   }, [battle.phase]);
 
@@ -398,10 +411,9 @@ export default function BattleScreen() {
     );
   }
 
-  // Question / Result / Explanation Phases
+  // Question / Result Phases
   const correctAnswer = battle.roundResult?.correct_answer ?? null;
-  const showResult =
-    battle.phase === "result" || battle.phase === "explanation";
+  const showResult = battle.phase === "result";
 
   return (
     <SafeAreaView className="flex-1 bg-dark">
@@ -610,23 +622,48 @@ export default function BattleScreen() {
           </View>
         )}
 
-        {/* Explanation */}
-        {battle.phase === "explanation" && battle.roundResult && (
+        {/* Waiting for opponent (human matches) */}
+        {battle.waitingForOpponent && battle.phase === "question" && (
           <View className="mt-4 bg-dark-card rounded-xl p-4 border border-secondary/30">
-            <Text className="text-secondary font-bold mb-2">Explanation</Text>
+            <View className="flex-row items-center mb-2">
+              <Ionicons name="hourglass-outline" size={16} color="#60A5FA" />
+              <TextSemibold className="text-secondary ml-2">
+                Answer locked in — waiting for opponent...
+              </TextSemibold>
+            </View>
+            {battle.roundResult?.explanation ? null : battle.question?.explanation ? (
+              <>
+                <TextSemibold className="text-gray-500 text-xs uppercase mb-1">Explanation</TextSemibold>
+                <Text className="text-gray-400 leading-5 text-sm">
+                  {battle.question.explanation}
+                </Text>
+              </>
+            ) : null}
+          </View>
+        )}
+
+        {/* Inline explanation after result */}
+        {showResult && battle.roundResult && (
+          <Animated.View
+            entering={FadeIn.duration(300)}
+            className="mt-4 bg-dark-card rounded-xl p-4 border border-secondary/30"
+          >
+            <TextSemibold className="text-secondary mb-2">Explanation</TextSemibold>
             <Text className="text-gray-300 leading-5">
               {battle.roundResult.explanation}
             </Text>
-            <Pressable
-              onPress={battle.nextRound}
-              className="bg-dark-card border-2 border-primary rounded-xl p-3 mt-4 active:bg-dark-elevated"
-            >
-              <Text className="text-primary text-center font-bold">
-                {battle.currentRound >= battle.totalRounds
-                  ? "See Results"
-                  : "Next Round"}
-              </Text>
-            </Pressable>
+          </Animated.View>
+        )}
+
+        {/* Auto-advance progress bar */}
+        {showResult && (
+          <View className="mt-4 mx-2">
+            <View className="h-1 bg-dark-card rounded-full overflow-hidden">
+              <Animated.View
+                style={autoAdvanceBarStyle}
+                className="h-full bg-primary/40 rounded-full"
+              />
+            </View>
           </View>
         )}
       </ScrollView>

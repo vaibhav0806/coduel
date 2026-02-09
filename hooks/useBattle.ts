@@ -23,7 +23,6 @@ export type BattlePhase =
   | "countdown"
   | "question"
   | "result"
-  | "explanation"
   | "match_end";
 
 interface BattlePlayer {
@@ -170,6 +169,8 @@ export function useBattle({
   const [isPlayer1, setIsPlayer1] = useState(true);
   const [countdown, setCountdown] = useState(3);
   const [opponentForfeited, setOpponentForfeited] = useState(false);
+  const [timedOut, setTimedOut] = useState(false);
+  const [waitingForOpponent, setWaitingForOpponent] = useState(false);
 
   const channelRef = useRef<RealtimeChannel | null>(null);
   const forfeitDataRef = useRef<{ rating_change: number; new_rating: number } | null>(null);
@@ -190,6 +191,9 @@ export function useBattle({
   const playerRef = useRef<BattlePlayer | null>(null);
   const opponentRef = useRef<BattlePlayer | null>(null);
   const currentRoundRef = useRef(1);
+  const autoAdvanceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const nextRoundRef = useRef<() => void>(() => {});
+  const timedOutRef = useRef(false);
 
   // Keep refs in sync with state
   useEffect(() => { currentRoundRef.current = currentRound; }, [currentRound]);
@@ -207,6 +211,13 @@ export function useBattle({
     if (pollRef.current) {
       clearInterval(pollRef.current);
       pollRef.current = null;
+    }
+  }, []);
+
+  const clearAutoAdvance = useCallback(() => {
+    if (autoAdvanceRef.current) {
+      clearTimeout(autoAdvanceRef.current);
+      autoAdvanceRef.current = null;
     }
   }, []);
 
@@ -230,7 +241,12 @@ export function useBattle({
 
       clearTimer();
       clearPoll();
+      setWaitingForOpponent(false);
       setPhase("result");
+
+      // Schedule auto-advance
+      clearAutoAdvance();
+      const playerTimedOut = timedOutRef.current;
 
       // Check if match is over
       const pScore = result.player_score;
@@ -330,9 +346,20 @@ export function useBattle({
             }
           })();
         }
+
+        // Auto-advance to match_end after 2s
+        autoAdvanceRef.current = setTimeout(() => {
+          setPhase("match_end");
+        }, 2000);
+      } else {
+        // Match continues — auto-advance to next round
+        const delay = playerTimedOut ? 4000 : 3000;
+        autoAdvanceRef.current = setTimeout(() => {
+          nextRoundRef.current();
+        }, delay);
       }
     },
-    [userId, matchId, clearTimer, clearPoll]
+    [userId, matchId, clearTimer, clearPoll, clearAutoAdvance]
   );
 
   // Process human round: fetch DB data, compute result
@@ -464,6 +491,7 @@ export function useBattle({
           console.log("[Battle] Opponent answered (broadcast)");
           setOpponentAnswered(true);
           opponentAnsweredRef.current = true;
+          setWaitingForOpponent(false);
           // If we already submitted, process the round
           if (submittedRef.current) {
             processHumanRound();
@@ -602,6 +630,9 @@ export function useBattle({
       if (phase !== "question" && answerIndex !== -1) return;
 
       submittedRef.current = true;
+      const isTimeout = answerIndex === -1;
+      setTimedOut(isTimeout);
+      timedOutRef.current = isTimeout;
       const answerTime = Date.now() - startTimeRef.current;
       setSelectedAnswer(answerIndex);
       clearTimer();
@@ -614,7 +645,12 @@ export function useBattle({
       if (isBotRef.current) {
         processBotRound(answerIndex, answerTime);
       } else {
-        // Human match: start fallback polling
+        // Human match: show waiting state
+        if (!opponentAnsweredRef.current) {
+          setWaitingForOpponent(true);
+        }
+
+        // Start fallback polling
         startHumanPoll(currentRound);
 
         // If opponent already answered, process immediately
@@ -637,18 +673,12 @@ export function useBattle({
     [userId]
   );
 
-  const showExplanation = useCallback(() => {
-    setPhase("explanation");
-  }, []);
-
   const nextRound = useCallback(() => {
     if (matchResult) {
       setPhase("match_end");
       return;
     }
 
-    const pScore = playerScoreRef.current;
-    const oScore = opponentScoreRef.current;
     if (currentRound >= 5) {
       setPhase("match_end");
       return;
@@ -662,6 +692,9 @@ export function useBattle({
     opponentAnsweredRef.current = false;
     setRoundWinner(null);
     setRoundResult(null);
+    setTimedOut(false);
+    timedOutRef.current = false;
+    setWaitingForOpponent(false);
     submittedRef.current = false;
 
     const nextQ = questionsRef.current.find(
@@ -673,9 +706,13 @@ export function useBattle({
     setPhase("countdown");
   }, [matchResult, currentRound]);
 
+  // Keep nextRoundRef in sync for auto-advance timer
+  useEffect(() => { nextRoundRef.current = nextRound; }, [nextRound]);
+
   const handleForfeit = useCallback(async () => {
     clearTimer();
     clearPoll();
+    clearAutoAdvance();
 
     try {
       const result = await forfeitMatch(matchId, userId);
@@ -703,7 +740,7 @@ export function useBattle({
     } catch (err) {
       console.error("[Battle] Forfeit error:", err);
     }
-  }, [matchId, userId, clearTimer, clearPoll]);
+  }, [matchId, userId, clearTimer, clearPoll, clearAutoAdvance]);
 
   const handleOpponentForfeitContinue = useCallback(async () => {
     const data = forfeitDataRef.current;
@@ -735,6 +772,11 @@ export function useBattle({
     setPhase("match_end");
   }, []);
 
+  // Cleanup auto-advance on unmount
+  useEffect(() => {
+    return () => { clearAutoAdvance(); };
+  }, [clearAutoAdvance]);
+
   return {
     phase,
     currentRound,
@@ -751,10 +793,10 @@ export function useBattle({
     roundResults,
     countdown,
     isPlayer1,
+    timedOut,
+    waitingForOpponent,
     submitAnswer: handleSubmitAnswer,
     sendReaction,
-    showExplanation,
-    nextRound,
     handleForfeit,
     opponentForfeited,
     handleOpponentForfeitContinue,

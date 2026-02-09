@@ -23,7 +23,6 @@ import Animated, {
   withDelay,
   interpolate,
   cancelAnimation,
-  runOnJS,
   Easing,
   FadeInDown,
   FadeIn,
@@ -207,8 +206,6 @@ export default function HomeScreen() {
 
   // Battle button idle animations
   useEffect(() => {
-    let isMounted = true;
-
     // Breathing glow aura
     glowPulse.value = withRepeat(
       withSequence(
@@ -218,33 +215,21 @@ export default function HomeScreen() {
       -1,
     );
 
-    // Shimmer sweep with callback-based loop for reliable timing
-    const startShimmer = () => {
-      if (!isMounted) return;
-      shimmerX.value = -100;
-      shimmerX.value = withTiming(
-        500,
-        { duration: 1200, easing: Easing.inOut(Easing.ease) },
-        (finished) => {
-          if (finished && isMounted) {
-            shimmerX.value = -100;
-            runOnJS(scheduleNextShimmer)();
-          }
-        }
-      );
-    };
-
-    const scheduleNextShimmer = () => {
-      if (!isMounted) return;
-      setTimeout(startShimmer, 3000);
-    };
-
-    // Start initial shimmer after a brief delay
-    const initialTimer = setTimeout(startShimmer, 500);
+    // Shimmer sweep — pure withRepeat, no callbacks/timeouts
+    shimmerX.value = -100;
+    shimmerX.value = withDelay(
+      500,
+      withRepeat(
+        withSequence(
+          withTiming(500, { duration: 1000, easing: Easing.linear }),
+          withDelay(3000, withTiming(-100, { duration: 0 }))
+        ),
+        -1,
+        false
+      )
+    );
 
     return () => {
-      isMounted = false;
-      clearTimeout(initialTimer);
       cancelAnimation(glowPulse);
       cancelAnimation(shimmerX);
     };
