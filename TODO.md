@@ -1,4 +1,4 @@
-# Coduel - Implementation TODO
+# GitGud - Implementation TODO
 
 > Step-by-step guide to complete the MVP.
 
@@ -21,8 +21,7 @@
 ├── ✅ Auth context (session, profile, refreshProfile)
 ├── ✅ AuthGuard (route protection, redirect to auth/onboarding)
 ├── ✅ Username onboarding (validation, availability check, save)
-├── 🔲 Apple OAuth (shows "Coming Soon" alert)
-└── 🔲 Edit username after onboarding
+└── ✅ Edit username/display name/country in Settings
 
 ✅ Phase 3: Core Battle System
 ├── ✅ Matchmaking via direct DB (no Edge Functions)
@@ -62,33 +61,44 @@
 ├── ✅ Leaderboard — weekly league tab (league_memberships query, empty state)
 └── ✅ Topics tab — practice by topic (Interview, Fundamentals, Advanced, Fun) per language
 
-✅ Phase 5: Streak System (mostly done)
+✅ Phase 5: Streak System
 ├── ✅ lib/streak.ts — streak logic (increment/reset/freeze)
 ├── ✅ On battle complete: check last_battle_date, update streak
 ├── ✅ Update current_streak, best_streak, last_battle_date in profiles
 ├── ✅ Handle streak freeze (decrement streak_freezes instead of resetting)
 ├── ✅ Streak freeze count on home screen (snow icon)
 ├── ✅ Streak display on home screen (flame icon + count)
-├── 🔲 Streak break warning modal
-├── 🔲 Streak milestone celebrations (7, 30, 100 days)
-└── 🔲 "Watch ad for freeze" button (placeholder/future)
+├── ✅ Streak break warning modal
+└── ✅ Streak milestone celebrations (3, 7, 14, 30, 50, 100, 365 days)
 
-🔲 Phase 6: Push Notifications
-✅ Phase 7: Share Cards (done)
+✅ Phase 6: Push Notifications
+├── ✅ Expo notifications plugin configured
+├── ✅ Permission request + push token registration
+├── ✅ Streak expiry reminder (10 PM local)
+├── ✅ Inactivity comeback reminder (2h/24h/48h based on last activity)
+├── ✅ Weekly league reminder (Saturday 6 PM)
+├── ✅ Notification tap handling (routes to home)
+└── ✅ Notification toggle in Settings
 
-✅ Phase 8: Polish & Animations (mostly done)
+✅ Phase 7: Share Cards
+├── ✅ ShareCard component (victory card with username, result, rating, streak)
+├── ✅ expo-sharing + react-native-view-shot capture & share
+├── ✅ Share button on match end screen
+└── ✅ Share button on profile screen
+
+✅ Phase 8: Polish & Animations
 ├── ✅ Battle animations (countdown, victory/defeat, confetti, tier promotion)
 ├── ✅ Skeleton loading states (Home, Profile)
 ├── ✅ Pull-to-refresh (Home, Profile, Leaderboard, Topics)
 ├── ✅ Button press feedback (spring scale on Battle button)
-├── ✅ Haptic feedback (button presses)
+├── ✅ Haptic feedback (button presses, correct/incorrect, victory/defeat)
 ├── ✅ Icon-only tab bar with outline/filled toggle
 ├── ✅ Battle button shimmer + glow pulse
-├── 🔲 Correct/incorrect answer shake animation
-├── 🔲 Score update animation (counter)
-├── 🔲 Sound effects
-├── 🔲 Haptic on correct/incorrect answers
-└── 🔲 Custom screen transitions
+├── ✅ Correct/incorrect answer shake animation + haptics
+├── ✅ Sound effects (countdown, correct, incorrect, victory, defeat)
+├── ✅ Settings page (profile, preferences, account, about)
+├── ✅ Score update animation (counter)
+└── ✅ Custom screen transitions
 
 🔲 Phase 9: Testing & Launch Prep
 ```
@@ -107,19 +117,21 @@
 
 ### 5.2 Streak UI
 - [x] Streak freeze count on home screen
-- [ ] Streak break warning modal
-- [ ] Streak milestone celebrations (7, 30, 100 days)
-- [ ] "Watch ad for freeze" button (placeholder/future)
+- [x] Streak break warning modal
+- [x] Streak milestone celebrations (3, 7, 14, 30, 50, 100, 365 days)
 
 ---
 
 ## Phase 6: Push Notifications
 
 - [x] Configure Expo notifications plugin in `app.json`
-- [ ] Request permissions on first launch
-- [ ] Store push token in profiles table
-- [ ] Schedule local notification: "Your streak is about to expire!"
-- [ ] Weekly league results notification (future)
+- [x] Request permissions on first launch
+- [x] Store push token in profiles table
+- [x] Schedule local notification: "Your streak is about to expire!"
+- [x] Inactivity comeback notification (2h/24h/48h)
+- [x] Weekly league reminder notification (Saturday 6 PM)
+- [x] Notification tap handling (routes to home)
+- [x] Notification settings toggle in Settings
 
 ---
 
@@ -128,7 +140,7 @@
 - [x] Create `components/ShareCard.tsx` (victory card with username, result, rating, streak)
 - [x] Use `expo-sharing` + `react-native-view-shot` to capture & share
 - [x] Wire share button on match end screen
-- [ ] Wire share button on profile screen
+- [x] Wire share button on profile screen
 
 ---
 
@@ -136,27 +148,29 @@
 
 ### 8.1 Battle Animations
 - [x] Countdown animation (ZoomIn scale)
-- [ ] Correct/incorrect answer feedback (color flash, shake)
-- [ ] Score update animation (animated counter)
+- [x] Correct/incorrect answer feedback (color highlight, shake on wrong)
+- [x] Score update animation (animated counter)
 - [x] Victory/defeat celebration (confetti, animated result screen)
 - [x] Tier promotion celebration (TierPromotion component)
 
 ### 8.2 General Polish
 - [x] Skeleton loading states (Home, Profile)
 - [x] Pull-to-refresh on home/profile/leaderboard/topics
-- [ ] Custom screen transitions
+- [x] Custom screen transitions
 - [x] Button press feedback (spring scale on Battle button)
 - [x] Battle button shimmer sweep + glow pulse animation
 - [x] Icon-only tab bar with outline/filled state
+- [x] Settings page (profile editing, preferences, account management)
 
 ### 8.3 Sound Effects
-- [ ] Add `assets/sounds/` with battle-start, correct, incorrect, victory, defeat
-- [ ] Play sounds at appropriate moments
+- [x] Add `assets/sounds/` with countdown, correct, incorrect, victory, defeat
+- [x] Play sounds at appropriate moments in battle
+- [x] Sound toggle in Settings
 
 ### 8.4 Haptic Feedback
 - [x] Button presses (Battle, Practice)
-- [ ] Correct/incorrect answers
-- [ ] Victory/defeat
+- [x] Correct/incorrect answers (success/error notification haptics)
+- [x] Victory/defeat
 
 ---
 
@@ -189,8 +203,7 @@
 ## Not Yet Planned / Future
 
 - Apple OAuth
-- Edit username after onboarding
-- Settings page (currently empty modal)
+- Guest → full account upgrade flow
 - Achievements / badges system
 - Daily challenges
 - Friends / direct challenges
@@ -199,3 +212,4 @@
 - More questions (need 100+ per difficulty per language)
 - More languages (Java, C++, Go, etc.)
 - Team Code Wars mode (see PLAN.md Phase 5+)
+- "Watch ad for freeze" button

@@ -8,65 +8,48 @@ const tierThemes: Record<
     label: string;
     colors: [string, string, string];
     accent: string;
-    glow: string;
   }
 > = {
   bronze: {
     label: "BRONZE",
     colors: ["#CD7F32", "#A0522D", "#8B4513"],
     accent: "#CD7F32",
-    glow: "rgba(205,127,50,0.25)",
   },
   silver: {
     label: "SILVER",
     colors: ["#E8E8E8", "#A8A8A8", "#808080"],
     accent: "#C0C0C0",
-    glow: "rgba(192,192,192,0.25)",
   },
   gold: {
     label: "GOLD",
     colors: ["#FFD700", "#F0C040", "#DAA520"],
     accent: "#FFD700",
-    glow: "rgba(255,215,0,0.25)",
   },
   diamond: {
     label: "DIAMOND",
     colors: ["#B9F2FF", "#7EC8E3", "#4169E1"],
     accent: "#B9F2FF",
-    glow: "rgba(185,242,255,0.25)",
   },
 };
 
-interface ShareCardProps {
-  result: "win" | "loss" | "draw";
-  playerUsername: string;
-  playerScore: number;
-  opponentScore: number;
+interface ProfileShareCardProps {
+  username: string;
   rating: number;
-  ratingChange: number;
   tier: string;
+  wins: number;
+  winRate: number;
   currentStreak: number;
-  isComeback: boolean;
 }
 
-export function ShareCard({
-  result,
-  playerUsername,
-  playerScore,
-  opponentScore,
+export function ProfileShareCard({
+  username,
   rating,
-  ratingChange,
   tier,
+  wins,
+  winRate,
   currentStreak,
-  isComeback,
-}: ShareCardProps) {
+}: ProfileShareCardProps) {
   const theme = tierThemes[tier] ?? tierThemes.bronze;
-  const resultColor = result === "win" ? "#39FF14" : result === "draw" ? "#9CA3AF" : "#EF4444";
-  const resultBg = result === "win"
-    ? "rgba(57,255,20,0.06)"
-    : result === "draw"
-    ? "rgba(156,163,175,0.06)"
-    : "rgba(239,68,68,0.06)";
 
   return (
     <View
@@ -77,7 +60,7 @@ export function ShareCard({
         overflow: "hidden",
       }}
     >
-      {/* === Top accent bar — tier gradient === */}
+      {/* Top accent bar — tier gradient */}
       <LinearGradient
         colors={theme.colors}
         start={{ x: 0, y: 0 }}
@@ -85,7 +68,6 @@ export function ShareCard({
         style={{ height: 4 }}
       />
 
-      {/* === Inner content === */}
       <View style={{ padding: 28, paddingTop: 24, paddingBottom: 24 }}>
         {/* Header row: GITGUD + tier badge */}
         <View
@@ -93,7 +75,7 @@ export function ShareCard({
             flexDirection: "row",
             alignItems: "center",
             justifyContent: "space-between",
-            marginBottom: 28,
+            marginBottom: 24,
           }}
         >
           <RNText
@@ -130,112 +112,43 @@ export function ShareCard({
           </LinearGradient>
         </View>
 
-        {/* Result headline */}
+        {/* Username */}
+        <View style={{ alignItems: "center", marginBottom: 20 }}>
+          <RNText
+            style={{
+              fontFamily: "Outfit_500Medium",
+              fontSize: 14,
+              color: "#6B7280",
+              letterSpacing: 0.5,
+            }}
+          >
+            @{username}
+          </RNText>
+        </View>
+
+        {/* Big rating */}
         <View style={{ alignItems: "center", marginBottom: 24 }}>
           <RNText
             style={{
               fontFamily: "Teko_700Bold",
-              fontSize: 52,
-              color: resultColor,
-              letterSpacing: 6,
-              lineHeight: 56,
+              fontSize: 72,
+              color: "#FFFFFF",
+              lineHeight: 72,
             }}
           >
-            {result === "win" ? "VICTORY" : result === "draw" ? "DRAW" : "DEFEAT"}
+            {rating.toLocaleString()}
           </RNText>
-
-          {isComeback && (
-            <View
-              style={{
-                flexDirection: "row",
-                alignItems: "center",
-                marginTop: 4,
-              }}
-            >
-              <Ionicons name="flash" size={12} color="#F59E0B" />
-              <RNText
-                style={{
-                  fontFamily: "Outfit_600SemiBold",
-                  fontSize: 11,
-                  color: "#F59E0B",
-                  letterSpacing: 1.5,
-                  marginLeft: 4,
-                }}
-              >
-                CLUTCH COMEBACK
-              </RNText>
-            </View>
-          )}
-        </View>
-
-        {/* Score block */}
-        <View
-          style={{
-            backgroundColor: resultBg,
-            borderRadius: 14,
-            borderWidth: 1,
-            borderColor: result === "win"
-              ? "rgba(57,255,20,0.1)"
-              : result === "draw"
-              ? "rgba(156,163,175,0.1)"
-              : "rgba(239,68,68,0.1)",
-            padding: 20,
-            alignItems: "center",
-            marginBottom: 24,
-          }}
-        >
-          {/* Username */}
           <RNText
             style={{
-              fontFamily: "Outfit_500Medium",
-              fontSize: 13,
-              color: "#6B7280",
-              letterSpacing: 0.5,
-              marginBottom: 12,
+              fontFamily: "Outfit_400Regular",
+              fontSize: 10,
+              color: "#4B5563",
+              letterSpacing: 1.5,
+              marginTop: 4,
             }}
           >
-            @{playerUsername}
+            RATING
           </RNText>
-
-          {/* Big score */}
-          <View
-            style={{
-              flexDirection: "row",
-              alignItems: "baseline",
-            }}
-          >
-            <RNText
-              style={{
-                fontFamily: "Teko_700Bold",
-                fontSize: 72,
-                color: "#FFFFFF",
-                lineHeight: 72,
-              }}
-            >
-              {playerScore}
-            </RNText>
-            <RNText
-              style={{
-                fontFamily: "Outfit_500Medium",
-                fontSize: 20,
-                color: "#3A3A44",
-                marginHorizontal: 12,
-                lineHeight: 72,
-              }}
-            >
-              -
-            </RNText>
-            <RNText
-              style={{
-                fontFamily: "Teko_700Bold",
-                fontSize: 72,
-                color: "#3A3A44",
-                lineHeight: 72,
-              }}
-            >
-              {opponentScore}
-            </RNText>
-          </View>
         </View>
 
         {/* Stats row */}
@@ -247,31 +160,18 @@ export function ShareCard({
             marginBottom: 28,
           }}
         >
-          {/* Rating */}
+          {/* Wins */}
           <View style={{ alignItems: "center", paddingHorizontal: 20 }}>
             <RNText
               style={{
                 fontFamily: "Outfit_700Bold",
-                fontSize: 26,
-                color: "#FFFFFF",
-                lineHeight: 30,
+                fontSize: 22,
+                color: "#10B981",
+                lineHeight: 26,
               }}
             >
-              {rating.toLocaleString()}
+              {wins}
             </RNText>
-            {ratingChange !== 0 && (
-              <RNText
-                style={{
-                  fontFamily: "Outfit_600SemiBold",
-                  fontSize: 13,
-                  color: ratingChange > 0 ? "#39FF14" : "#EF4444",
-                  marginTop: 2,
-                }}
-              >
-                {ratingChange > 0 ? "+" : ""}
-                {ratingChange}
-              </RNText>
-            )}
             <RNText
               style={{
                 fontFamily: "Outfit_400Regular",
@@ -281,11 +181,43 @@ export function ShareCard({
                 marginTop: 4,
               }}
             >
-              RATING
+              WINS
             </RNText>
           </View>
 
-          {/* Divider */}
+          <View
+            style={{
+              width: 1,
+              height: 32,
+              backgroundColor: "rgba(255,255,255,0.08)",
+            }}
+          />
+
+          {/* Win Rate */}
+          <View style={{ alignItems: "center", paddingHorizontal: 20 }}>
+            <RNText
+              style={{
+                fontFamily: "Outfit_700Bold",
+                fontSize: 22,
+                color: winRate >= 50 ? "#10B981" : "#EF4444",
+                lineHeight: 26,
+              }}
+            >
+              {winRate}%
+            </RNText>
+            <RNText
+              style={{
+                fontFamily: "Outfit_400Regular",
+                fontSize: 10,
+                color: "#4B5563",
+                letterSpacing: 1.5,
+                marginTop: 4,
+              }}
+            >
+              WIN RATE
+            </RNText>
+          </View>
+
           {currentStreak > 0 && (
             <>
               <View
@@ -298,24 +230,19 @@ export function ShareCard({
 
               {/* Streak */}
               <View style={{ alignItems: "center", paddingHorizontal: 20 }}>
-                <View
-                  style={{
-                    flexDirection: "row",
-                    alignItems: "center",
-                  }}
-                >
+                <View style={{ flexDirection: "row", alignItems: "center" }}>
                   <Ionicons
                     name="flame"
-                    size={20}
+                    size={18}
                     color="#FF6B35"
                     style={{ marginRight: 4 }}
                   />
                   <RNText
                     style={{
                       fontFamily: "Outfit_700Bold",
-                      fontSize: 26,
+                      fontSize: 22,
                       color: "#FFFFFF",
-                      lineHeight: 30,
+                      lineHeight: 26,
                     }}
                   >
                     {currentStreak}
@@ -362,7 +289,7 @@ export function ShareCard({
               letterSpacing: 0.5,
             }}
           >
-            Think you can beat me?
+            Can you beat me? — coduel.app
           </RNText>
         </View>
       </View>

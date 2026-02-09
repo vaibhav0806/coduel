@@ -67,6 +67,8 @@ interface MatchResult {
   new_level: number;
   leveled_up: boolean;
   promoted_to: "silver" | "gold" | "diamond" | null;
+  old_streak: number;
+  new_streak: number;
 }
 
 interface UseBattleProps {
@@ -126,12 +128,11 @@ function computeRoundResult(
   let winner: "player" | "opponent" | "tie" = "tie";
   if (playerCorrect && !opponentCorrect) winner = "player";
   else if (!playerCorrect && opponentCorrect) winner = "opponent";
-  else if (playerCorrect && opponentCorrect) {
-    winner = playerTimeMs <= opponentTimeMs ? "player" : "opponent";
-  }
+  // Both correct or both wrong = tie (no speed tiebreaker)
 
-  const pScore = currentPlayerScore + (winner === "player" ? 1 : 0);
-  const oScore = currentOpponentScore + (winner === "opponent" ? 1 : 0);
+  // Score = correct answers (not round wins)
+  const pScore = currentPlayerScore + (playerCorrect ? 1 : 0);
+  const oScore = currentOpponentScore + (opponentCorrect ? 1 : 0);
 
   return {
     round_number: roundNumber,
@@ -277,9 +278,15 @@ export function useBattle({
           ratingChange = loserDelta;
         }
 
+        // Reduce bot match rating rewards to 60%
+        if (isBotRef.current && ratingChange > 0) {
+          ratingChange = Math.round(ratingChange * 0.6);
+        }
+
         // Calculate XP earned (always awarded, even in practice)
-        const isWin = matchWinner === "player";
-        const xpResult = calculateMatchXP(isWin);
+        const matchResultType: "win" | "loss" | "draw" =
+          matchWinner === "player" ? "win" : matchWinner === "tie" ? "draw" : "loss";
+        const xpResult = calculateMatchXP(matchResultType);
         const newRating = isRankedRef.current
           ? applyFloorProtection(playerRating, playerRating + ratingChange)
           : playerRating;
@@ -289,7 +296,7 @@ export function useBattle({
           userId,
           playerRating,
           ratingChange,
-          isWin,
+          matchResultType,
           isRankedRef.current,
           xpResult.totalXP
         );
@@ -306,6 +313,8 @@ export function useBattle({
           new_level: xpUpdate.newLevel,
           leveled_up: xpUpdate.leveledUp,
           promoted_to: xpUpdate.promotedTo,
+          old_streak: xpUpdate.oldStreak,
+          new_streak: xpUpdate.newStreak,
         });
 
         // Only player1 updates the match record (to avoid double-writes)
@@ -339,7 +348,7 @@ export function useBattle({
 
               // Award league points (direct DB upsert)
               if (isRankedRef.current) {
-                await awardLeaguePoints(userId, isWin);
+                await awardLeaguePoints(userId, matchResultType);
               }
             } catch (err) {
               console.warn("[Battle] Match finalize error:", err);
@@ -662,17 +671,6 @@ export function useBattle({
     [phase, matchId, userId, currentRound, processBotRound, startHumanPoll, processHumanRound]
   );
 
-  const sendReaction = useCallback(
-    (emoji: string) => {
-      channelRef.current?.send({
-        type: "broadcast",
-        event: "reaction",
-        payload: { user_id: userId, reaction: emoji },
-      });
-    },
-    [userId]
-  );
-
   const nextRound = useCallback(() => {
     if (matchResult) {
       setPhase("match_end");
@@ -735,6 +733,8 @@ export function useBattle({
         new_level: result.new_level,
         leveled_up: result.leveled_up,
         promoted_to: promoted ? (newTier as "silver" | "gold" | "diamond") : null,
+        old_streak: 0,
+        new_streak: 0,
       });
       setPhase("match_end");
     } catch (err) {
@@ -753,7 +753,7 @@ export function useBattle({
     const tierOrder = ["bronze", "silver", "gold", "diamond"] as const;
     const promoted = isRankedRef.current && tierOrder.indexOf(newTier) > tierOrder.indexOf(oldTier);
 
-    const xpResult = calculateMatchXP(true);
+    const xpResult = calculateMatchXP("win");
 
     setMatchResult({
       winner: "player",
@@ -767,6 +767,8 @@ export function useBattle({
       new_level: playerRef.current?.rating ? getLevelFromXP(0).level : 1, // approximate
       leveled_up: false,
       promoted_to: promoted ? (newTier as "silver" | "gold" | "diamond") : null,
+      old_streak: 0,
+      new_streak: 0,
     });
     setOpponentForfeited(false);
     setPhase("match_end");
@@ -796,7 +798,6 @@ export function useBattle({
     timedOut,
     waitingForOpponent,
     submitAnswer: handleSubmitAnswer,
-    sendReaction,
     handleForfeit,
     opponentForfeited,
     handleOpponentForfeitContinue,
@@ -807,10 +808,10 @@ async function updateProfileAfterMatch(
   userId: string,
   currentRating: number,
   ratingChange: number,
-  isWin: boolean,
+  result: "win" | "loss" | "draw",
   isRanked: boolean,
   xpEarned: number
-): Promise<{ newLevel: number; leveledUp: boolean; promotedTo: "silver" | "gold" | "diamond" | null }> {
+): Promise<{ newLevel: number; leveledUp: boolean; promotedTo: "silver" | "gold" | "diamond" | null; oldStreak: number; newStreak: number }> {
   const newRating = applyFloorProtection(
     currentRating,
     currentRating + ratingChange
@@ -831,8 +832,9 @@ async function updateProfileAfterMatch(
     console.error("[Battle] Failed to fetch profile for update:", selectErr);
   }
 
+  const oldStreak = current?.current_streak ?? 0;
   const streakUpdate = calculateStreakUpdate({
-    current_streak: current?.current_streak ?? 0,
+    current_streak: oldStreak,
     best_streak: current?.best_streak ?? 0,
     last_battle_date: current?.last_battle_date ?? null,
     streak_freezes: current?.streak_freezes ?? 0,
@@ -856,8 +858,9 @@ async function updateProfileAfterMatch(
   if (isRanked) {
     updateData.rating = newRating;
     updateData.tier = newTier;
-    updateData.wins = (current?.wins ?? 0) + (isWin ? 1 : 0);
-    updateData.losses = (current?.losses ?? 0) + (isWin ? 0 : 1);
+    if (result === "win") updateData.wins = (current?.wins ?? 0) + 1;
+    else if (result === "loss") updateData.losses = (current?.losses ?? 0) + 1;
+    // draws: neither wins nor losses incremented
   }
 
   const { error: updateErr } = await supabase
@@ -871,5 +874,5 @@ async function updateProfileAfterMatch(
 
   // League points are awarded via edge function call in applyRoundResult
 
-  return { newLevel: levelInfo.level, leveledUp, promotedTo };
+  return { newLevel: levelInfo.level, leveledUp, promotedTo, oldStreak, newStreak: streakUpdate.current_streak };
 }

@@ -723,7 +723,7 @@ export async function forfeitMatch(
     .eq("id", matchId);
 
   // 5. Update quitter's profile (loss)
-  const quitterXP = calculateMatchXP(false);
+  const quitterXP = calculateMatchXP("loss");
   const quitterNewRating = match.is_ranked
     ? applyFloorProtection(quitterProfile.rating, quitterProfile.rating + loserDelta)
     : quitterProfile.rating;
@@ -757,7 +757,7 @@ export async function forfeitMatch(
       ? applyFloorProtection(opponentProfile.rating, opponentProfile.rating + winnerDelta)
       : opponentProfile.rating;
     const oppNewTier = getTierForRating(oppNewRating);
-    const oppXP = calculateMatchXP(true);
+    const oppXP = calculateMatchXP("win");
     const oppStreak = calculateStreakUpdate({
       current_streak: opponentProfile.current_streak,
       best_streak: opponentProfile.best_streak,
@@ -783,9 +783,9 @@ export async function forfeitMatch(
 
   // 7. Award league points
   if (match.is_ranked) {
-    await awardLeaguePoints(quitterId, false);
+    await awardLeaguePoints(quitterId, "loss");
     if (opponentId && !match.is_bot_match) {
-      await awardLeaguePoints(opponentId, true);
+      await awardLeaguePoints(opponentId, "win");
     }
   }
 
@@ -820,11 +820,12 @@ export async function forfeitMatch(
 
 export async function awardLeaguePoints(
   userId: string,
-  isWinner: boolean
+  result: "win" | "loss" | "draw"
 ) {
   const LEAGUE_WIN = 3;
+  const LEAGUE_DRAW = 2;
   const LEAGUE_LOSS = 1;
-  const points = isWinner ? LEAGUE_WIN : LEAGUE_LOSS;
+  const points = result === "win" ? LEAGUE_WIN : result === "draw" ? LEAGUE_DRAW : LEAGUE_LOSS;
 
   // Get user's current tier
   const { data: prof } = await supabase

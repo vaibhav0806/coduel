@@ -6,6 +6,8 @@ import {
   registerForPushNotifications,
   scheduleStreakReminder,
   cancelStreakReminder,
+  scheduleInactivityReminder,
+  scheduleLeagueReminder,
 } from "@/lib/notifications";
 
 interface UseNotificationsParams {
@@ -42,7 +44,7 @@ export function useNotifications({
     })();
   }, [userId]);
 
-  // Effect 2: Schedule/cancel streak reminder reactively
+  // Effect 2: Schedule/cancel reminders reactively
   useEffect(() => {
     if (!userId) return;
 
@@ -51,6 +53,9 @@ export function useNotifications({
     } else {
       cancelStreakReminder();
     }
+
+    scheduleInactivityReminder(lastBattleDate);
+    scheduleLeagueReminder();
   }, [userId, lastBattleDate, currentStreak]);
 
   // Effect 3: Handle notification taps
@@ -58,7 +63,11 @@ export function useNotifications({
     const subscription = Notifications.addNotificationResponseReceivedListener(
       (response) => {
         const data = response.notification.request.content.data;
-        if (data?.type === "streak_reminder") {
+        if (
+          data?.type === "streak_reminder" ||
+          data?.type === "inactivity_reminder" ||
+          data?.type === "league_reminder"
+        ) {
           router.navigate("/(tabs)");
         }
       }

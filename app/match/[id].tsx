@@ -35,7 +35,7 @@ interface MatchDetail {
   playerScore: number;
   opponentScore: number;
   ratingChange: number | null;
-  won: boolean;
+  result: "win" | "loss" | "draw";
   isBotMatch: boolean;
   forfeitedBy: string | null;
 }
@@ -158,7 +158,9 @@ export default function MatchReviewScreen() {
         playerScore: isP1 ? match.player1_score : match.player2_score,
         opponentScore: isP1 ? match.player2_score : match.player1_score,
         ratingChange: isP1 ? match.player1_rating_change : match.player2_rating_change,
-        won: match.winner_id === userId,
+        result: match.winner_id === userId ? "win"
+          : match.winner_id === null && match.ended_at && !match.forfeited_by ? "draw"
+          : "loss",
         isBotMatch: match.is_bot_match,
         forfeitedBy: match.forfeited_by,
       });
@@ -196,8 +198,9 @@ export default function MatchReviewScreen() {
     );
   }
 
-  const { match, rounds, opponentName, opponentRating, playerScore, opponentScore, ratingChange, won, isBotMatch, forfeitedBy } = detail;
+  const { match, rounds, opponentName, opponentRating, playerScore, opponentScore, ratingChange, result, isBotMatch, forfeitedBy } = detail;
   const totalRounds = rounds.length;
+  const won = result === "win";
   const isForfeit = forfeitedBy !== null;
   const playerForfeited = forfeitedBy === userId;
 
@@ -235,15 +238,17 @@ export default function MatchReviewScreen() {
             <TextBold
               style={{
                 fontSize: 28,
-                color: won ? "#10B981" : "#EF4444",
+                color: result === "win" ? "#10B981" : result === "draw" ? "#9CA3AF" : "#EF4444",
                 letterSpacing: 2,
               }}
             >
               {isForfeit
-                ? won
+                ? result === "win"
                   ? "FORFEIT WIN"
                   : "FORFEITED"
-                : won
+                : result === "draw"
+                ? "DRAW"
+                : result === "win"
                 ? "VICTORY"
                 : "DEFEAT"}
             </TextBold>
@@ -258,7 +263,7 @@ export default function MatchReviewScreen() {
               <TextBold
                 style={{
                   fontSize: 36,
-                  color: won ? "#10B981" : "#FFFFFF",
+                  color: result === "draw" ? "#FFFFFF" : won ? "#10B981" : "#FFFFFF",
                   lineHeight: 42,
                 }}
               >
@@ -276,7 +281,7 @@ export default function MatchReviewScreen() {
               <TextBold
                 style={{
                   fontSize: 36,
-                  color: !won ? "#EF4444" : "#FFFFFF",
+                  color: result === "draw" ? "#FFFFFF" : !won ? "#EF4444" : "#FFFFFF",
                   lineHeight: 42,
                 }}
               >

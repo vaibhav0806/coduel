@@ -1,4 +1,4 @@
-// Coduel brand colors - Neon Green theme
+// GitGud brand colors - Neon Green theme
 const tintColorLight = '#39FF14';
 const tintColorDark = '#39FF14';
 

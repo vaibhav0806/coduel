@@ -1,6 +1,6 @@
-# Coduel
+# GitGud
 
-1v1 code duels. Fast, competitive, addictive.
+1v1 code battles. Fast, competitive, addictive.
 
 Players battle in real-time best-of-3 matches, predicting code output under time pressure. Think Duolingo meets competitive gaming — for coders.
 

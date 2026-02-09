@@ -4,6 +4,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { router, useFocusEffect } from "expo-router";
 import { useState, useCallback, useEffect } from "react";
+import ViewShot from "react-native-view-shot";
 import { LinearGradient } from "expo-linear-gradient";
 import Animated, {
   FadeIn,
@@ -18,6 +19,8 @@ import { supabase } from "@/lib/supabase";
 import { Match } from "@/types/database";
 import { getTierConfig } from "@/lib/rating";
 import { Skeleton, useSkeletonAnimation } from "@/components/ui/Skeleton";
+import { ProfileShareCard } from "@/components/ProfileShareCard";
+import { useShareCard } from "@/hooks/useShareCard";
 
 interface MatchHistoryItem {
   id: string;
@@ -26,7 +29,7 @@ interface MatchHistoryItem {
   playerScore: number;
   opponentScore: number;
   ratingChange: number | null;
-  won: boolean;
+  result: "win" | "loss" | "draw";
   isBotMatch: boolean;
   date: string;
 }
@@ -163,6 +166,7 @@ function ProfileSkeleton() {
 
 export default function ProfileScreen() {
   const { user, profile, refreshProfile } = useAuth();
+  const { viewShotRef, isSharing, share } = useShareCard();
   const [matchHistory, setMatchHistory] = useState<MatchHistoryItem[]>([]);
   const [globalRank, setGlobalRank] = useState<number | null>(null);
   const [loadingHistory, setLoadingHistory] = useState(true);
@@ -243,7 +247,9 @@ export default function ProfileScreen() {
         const playerScore = isP1 ? m.player1_score : m.player2_score;
         const opponentScore = isP1 ? m.player2_score : m.player1_score;
         const ratingChange = isP1 ? m.player1_rating_change : m.player2_rating_change;
-        const won = m.winner_id === userId;
+        const matchResult: "win" | "loss" | "draw" = m.winner_id === userId ? "win"
+          : m.winner_id === null && m.ended_at && !m.forfeited_by ? "draw"
+          : "loss";
 
         let opponentName = "Bot";
         let opponentRating: number | null = null;
@@ -260,7 +266,7 @@ export default function ProfileScreen() {
           playerScore,
           opponentScore,
           ratingChange,
-          won,
+          result: matchResult,
           isBotMatch: m.is_bot_match,
           date: m.ended_at,
         };
@@ -352,6 +358,22 @@ export default function ProfileScreen() {
         style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }}
       />
 
+      {/* Hidden ProfileShareCard for capture */}
+      <ViewShot
+        ref={viewShotRef}
+        options={{ format: "png", quality: 1 }}
+        style={{ position: "absolute", left: -9999 }}
+      >
+        <ProfileShareCard
+          username={profile.username ?? "Player"}
+          rating={rating}
+          tier={profile.tier ?? "bronze"}
+          wins={wins}
+          winRate={winRate}
+          currentStreak={streak}
+        />
+      </ViewShot>
+
       {/* Section 1: Custom Header */}
       <Animated.View
         entering={FadeIn.duration(300)}
@@ -360,9 +382,18 @@ export default function ProfileScreen() {
         <TextBold className="text-white" style={{ fontSize: 20 }}>
           Profile
         </TextBold>
-        <Pressable onPress={() => router.push("/modal")} hitSlop={12}>
-          <Ionicons name="settings-outline" size={20} color="#6B7280" />
-        </Pressable>
+        <View className="flex-row items-center">
+          <Pressable onPress={share} disabled={isSharing} hitSlop={12} className="mr-4">
+            <Ionicons
+              name={isSharing ? "hourglass-outline" : "share-outline"}
+              size={20}
+              color="#6B7280"
+            />
+          </Pressable>
+          <Pressable onPress={() => router.push("/modal")} hitSlop={12}>
+            <Ionicons name="settings-outline" size={20} color="#6B7280" />
+          </Pressable>
+        </View>
       </Animated.View>
 
       <ScrollView
@@ -629,18 +660,22 @@ export default function ProfileScreen() {
                   }
                 >
                   <View className="flex-row items-center p-4">
-                    {/* W/L Badge */}
+                    {/* W/L/D Badge */}
                     <View
                       style={{
                         width: 28,
                         height: 28,
                         borderRadius: 6,
-                        backgroundColor: match.won
+                        backgroundColor: match.result === "win"
                           ? "rgba(16,185,129,0.15)"
+                          : match.result === "draw"
+                          ? "rgba(156,163,175,0.15)"
                           : "rgba(239,68,68,0.15)",
                         borderWidth: 1,
-                        borderColor: match.won
+                        borderColor: match.result === "win"
                           ? "rgba(16,185,129,0.3)"
+                          : match.result === "draw"
+                          ? "rgba(156,163,175,0.3)"
                           : "rgba(239,68,68,0.3)",
                         alignItems: "center",
                         justifyContent: "center",
@@ -649,10 +684,10 @@ export default function ProfileScreen() {
                       <TextBold
                         style={{
                           fontSize: 12,
-                          color: match.won ? "#10B981" : "#EF4444",
+                          color: match.result === "win" ? "#10B981" : match.result === "draw" ? "#9CA3AF" : "#EF4444",
                         }}
                       >
-                        {match.won ? "W" : "L"}
+                        {match.result === "win" ? "W" : match.result === "draw" ? "D" : "L"}
                       </TextBold>
                     </View>
 

@@ -60,3 +60,17 @@ export function calculateStreakUpdate(state: StreakState): StreakState {
     streak_freezes: freezes,
   };
 }
+
+export const STREAK_MILESTONES = [
+  { days: 3,   title: "Getting Started",  subtitle: "3-day streak!",    icon: "flame" as const,   color: "#FF6B35" },
+  { days: 7,   title: "One Week",         subtitle: "7-day streak!",    icon: "flame" as const,   color: "#FF6B35" },
+  { days: 14,  title: "Two Weeks",        subtitle: "14-day streak!",   icon: "rocket" as const,  color: "#3B82F6" },
+  { days: 30,  title: "Monthly Master",   subtitle: "30-day streak!",   icon: "trophy" as const,  color: "#F59E0B" },
+  { days: 50,  title: "Unstoppable",      subtitle: "50-day streak!",   icon: "diamond" as const, color: "#8B5CF6" },
+  { days: 100, title: "Centurion",        subtitle: "100-day streak!",  icon: "star" as const,    color: "#39FF14" },
+  { days: 365, title: "Legendary",        subtitle: "365-day streak!",  icon: "trophy" as const,  color: "#FFD700" },
+];
+
+export function getStreakMilestone(oldStreak: number, newStreak: number) {
+  return STREAK_MILESTONES.find(m => newStreak >= m.days && oldStreak < m.days) ?? null;
+}

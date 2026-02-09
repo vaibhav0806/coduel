@@ -1,11 +1,11 @@
 {
   "expo": {
-    "name": "Coduel",
-    "slug": "coduel",
+    "name": "GitGud",
+    "slug": "gitgud",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "coduel",
+    "scheme": "gitgud",
     "userInterfaceStyle": "dark",
     "newArchEnabled": true,
     "splash": {
@@ -15,7 +15,7 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.coduel.app"
+      "bundleIdentifier": "com.gitgud.app"
     },
     "android": {
       "adaptiveIcon": {
@@ -23,7 +23,7 @@
         "backgroundColor": "#0F0F1A"
       },
       "edgeToEdgeEnabled": true,
-      "package": "com.coduel.app"
+      "package": "com.gitgud.app"
     },
     "web": {
       "bundler": "metro",

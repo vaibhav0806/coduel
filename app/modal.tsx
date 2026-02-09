@@ -19,8 +19,14 @@ import Animated, {
   SlideInDown,
   Easing,
 } from "react-native-reanimated";
+import * as Notifications from "expo-notifications";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
+import { setSoundEnabled as setAudioSoundEnabled } from "@/lib/audio";
+import {
+  cancelAllReminders,
+  setNotificationsEnabled as setNotifEnabledCache,
+} from "@/lib/notifications";
 import { LANGUAGES } from "@/components/LanguageSelector";
 
 // --- Countries list ---
@@ -162,6 +168,7 @@ export default function SettingsScreen() {
   const [displayNameSaved, setDisplayNameSaved] = useState(false);
   const [countryPickerVisible, setCountryPickerVisible] = useState(false);
   const [languagePickerVisible, setLanguagePickerVisible] = useState(false);
+  const [notifEnabled, setNotifEnabled] = useState(true);
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [hapticEnabled, setHapticEnabled] = useState(true);
   const [deleting, setDeleting] = useState(false);
@@ -169,8 +176,10 @@ export default function SettingsScreen() {
   // Load device-local preferences
   useEffect(() => {
     (async () => {
+      const notif = await AsyncStorage.getItem("setting_notifications");
       const sound = await AsyncStorage.getItem("setting_sound");
       const haptic = await AsyncStorage.getItem("setting_haptic");
+      if (notif !== null) setNotifEnabled(notif !== "false");
       if (sound !== null) setSoundEnabled(sound === "true");
       if (haptic !== null) setHapticEnabled(haptic === "true");
     })();
@@ -279,8 +288,18 @@ export default function SettingsScreen() {
   };
 
   // --- Device preferences ---
+  const toggleNotifications = async (val: boolean) => {
+    setNotifEnabled(val);
+    setNotifEnabledCache(val);
+    await AsyncStorage.setItem("setting_notifications", String(val));
+    if (!val) {
+      await Notifications.cancelAllScheduledNotificationsAsync();
+    }
+  };
+
   const toggleSound = async (val: boolean) => {
     setSoundEnabled(val);
+    setAudioSoundEnabled(val);
     await AsyncStorage.setItem("setting_sound", String(val));
   };
 
@@ -505,6 +524,23 @@ export default function SettingsScreen() {
 
         <View className="border-b border-dark-border mx-4" />
 
+        {/* Notifications */}
+        <SettingsRow
+          icon="notifications-outline"
+          iconColor="#6B7280"
+          label="Notifications"
+          rightElement={
+            <Switch
+              value={notifEnabled}
+              onValueChange={toggleNotifications}
+              trackColor={{ false: "#1A1A24", true: "rgba(57,255,20,0.3)" }}
+              thumbColor={notifEnabled ? "#39FF14" : "#6B7280"}
+            />
+          }
+        />
+
+        <View className="border-b border-dark-border mx-4" />
+
         {/* Sound effects */}
         <SettingsRow
           icon="volume-medium-outline"
@@ -584,7 +620,7 @@ export default function SettingsScreen() {
           iconColor="#6B7280"
           label="Terms of Service"
           onPress={() =>
-            WebBrowser.openBrowserAsync("https://coduel.app/terms")
+            WebBrowser.openBrowserAsync("https://gitgud.dev/terms")
           }
         />
 
@@ -595,7 +631,7 @@ export default function SettingsScreen() {
           iconColor="#6B7280"
           label="Privacy Policy"
           onPress={() =>
-            WebBrowser.openBrowserAsync("https://coduel.app/privacy")
+            WebBrowser.openBrowserAsync("https://gitgud.dev/privacy")
           }
         />
       </View>

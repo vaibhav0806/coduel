@@ -296,16 +296,8 @@ async function processRoundResult(
     roundWinnerId = match.player1_id as string;
   } else if (!p1Correct && p2Correct) {
     roundWinnerId = (match.player2_id as string) ?? "bot";
-  } else if (p1Correct && p2Correct) {
-    // Both correct — faster wins
-    if (p1Time < p2Time) {
-      roundWinnerId = match.player1_id as string;
-    } else if (p2Time < p1Time) {
-      roundWinnerId = (match.player2_id as string) ?? "bot";
-    }
-    // If exact same time, it's a tie (no winner for this round)
   }
-  // Both wrong — no winner
+  // Both correct or both wrong = tie (no speed tiebreaker)
 
   // Update round with winner
   await supabase
@@ -313,18 +305,19 @@ async function processRoundResult(
     .update({ round_winner_id: roundWinnerId })
     .eq("id", round.id as string);
 
-  // Count scores
+  // Count scores (correct answers, not round wins)
   const { data: allRounds } = await supabase
     .from("match_rounds")
-    .select("round_winner_id, round_number")
+    .select("player1_answer, player2_answer, questions(correct_answer)")
     .eq("match_id", matchId)
-    .not("round_winner_id", "is", null);
+    .not("player1_answer", "is", null);
 
   let p1Score = 0;
   let p2Score = 0;
   for (const r of allRounds ?? []) {
-    if (r.round_winner_id === match.player1_id) p1Score++;
-    else if (r.round_winner_id !== null) p2Score++;
+    const correct = (r.questions as Record<string, unknown>)?.correct_answer;
+    if (r.player1_answer === correct) p1Score++;
+    if (r.player2_answer === correct) p2Score++;
   }
 
   // Update match scores
@@ -413,26 +406,34 @@ async function processRoundResult(
         p1RatingChange = loserDelta;
       }
 
+      // Reduce bot match rating rewards to 60%
+      if (match.is_bot_match) {
+        if (p1RatingChange > 0) p1RatingChange = Math.round(p1RatingChange * 0.6);
+        if (p2RatingChange > 0) p2RatingChange = Math.round(p2RatingChange * 0.6);
+      }
+
       // Update player 1 profile
       const newP1Rating = applyFloorProtection(
         p1Rating,
         p1Rating + p1RatingChange
       );
-      const p1Won = winnerId === match.player1_id;
       const { data: p1Current } = await supabase
         .from("profiles")
         .select("wins, losses")
         .eq("id", match.player1_id as string)
         .single();
 
+      const p1Update: Record<string, unknown> = {
+        rating: newP1Rating,
+        tier: getTierForRating(newP1Rating),
+      };
+      if (winnerId === match.player1_id) p1Update.wins = (p1Current?.wins ?? 0) + 1;
+      else if (winnerId !== null) p1Update.losses = (p1Current?.losses ?? 0) + 1;
+      // draw: neither incremented
+
       await supabase
         .from("profiles")
-        .update({
-          rating: newP1Rating,
-          tier: getTierForRating(newP1Rating),
-          wins: (p1Current?.wins ?? 0) + (p1Won ? 1 : 0),
-          losses: (p1Current?.losses ?? 0) + (p1Won ? 0 : 1),
-        })
+        .update(p1Update)
         .eq("id", match.player1_id as string);
 
       // Update player 2 profile (if human)
@@ -441,21 +442,23 @@ async function processRoundResult(
           p2Rating,
           p2Rating + p2RatingChange
         );
-        const p2Won = winnerId === match.player2_id;
         const { data: p2Current } = await supabase
           .from("profiles")
           .select("wins, losses")
           .eq("id", match.player2_id as string)
           .single();
 
+        const p2Update: Record<string, unknown> = {
+          rating: newP2Rating,
+          tier: getTierForRating(newP2Rating),
+        };
+        if (winnerId === match.player2_id) p2Update.wins = (p2Current?.wins ?? 0) + 1;
+        else if (winnerId !== null) p2Update.losses = (p2Current?.losses ?? 0) + 1;
+        // draw: neither incremented
+
         await supabase
           .from("profiles")
-          .update({
-            rating: newP2Rating,
-            tier: getTierForRating(newP2Rating),
-            wins: (p2Current?.wins ?? 0) + (p2Won ? 1 : 0),
-            losses: (p2Current?.losses ?? 0) + (p2Won ? 0 : 1),
-          })
+          .update(p2Update)
           .eq("id", match.player2_id as string);
       }
     }
@@ -476,6 +479,7 @@ async function processRoundResult(
     // Award league points for ranked matches
     if (match.is_ranked) {
       const LEAGUE_WIN = 3;
+      const LEAGUE_DRAW = 2;
       const LEAGUE_LOSS = 1;
 
       // Monday of current week as YYYY-MM-DD
@@ -487,6 +491,8 @@ async function processRoundResult(
       const weekStart = `${monday.getFullYear()}-${String(monday.getMonth() + 1).padStart(2, "0")}-${String(monday.getDate()).padStart(2, "0")}`;
 
       // Player 1
+      const p1Points = winnerId === match.player1_id ? LEAGUE_WIN
+        : winnerId === null ? LEAGUE_DRAW : LEAGUE_LOSS;
       const { data: p1Prof } = await supabase
         .from("profiles")
         .select("tier")
@@ -496,12 +502,14 @@ async function processRoundResult(
         supabase,
         match.player1_id as string,
         weekStart,
-        winnerId === match.player1_id ? LEAGUE_WIN : LEAGUE_LOSS,
+        p1Points,
         p1Prof?.tier ?? "bronze"
       );
 
       // Player 2 (human only)
       if (match.player2_id) {
+        const p2Points = winnerId === match.player2_id ? LEAGUE_WIN
+          : winnerId === null ? LEAGUE_DRAW : LEAGUE_LOSS;
         const { data: p2Prof } = await supabase
           .from("profiles")
           .select("tier")
@@ -511,7 +519,7 @@ async function processRoundResult(
           supabase,
           match.player2_id as string,
           weekStart,
-          winnerId === match.player2_id ? LEAGUE_WIN : LEAGUE_LOSS,
+          p2Points,
           p2Prof?.tier ?? "bronze"
         );
       }
@@ -606,7 +614,7 @@ async function handleAwardLeaguePoints(
     return jsonResponse({ status: "not_ranked" });
   }
 
-  if (!match.winner_id && !match.ended_at) {
+  if (!match.ended_at) {
     return jsonResponse({ error: "Match not ended" }, 400);
   }
 
@@ -619,10 +627,12 @@ async function handleAwardLeaguePoints(
   const weekStart = `${monday.getFullYear()}-${String(monday.getMonth() + 1).padStart(2, "0")}-${String(monday.getDate()).padStart(2, "0")}`;
 
   const LEAGUE_WIN = 3;
+  const LEAGUE_DRAW = 2;
   const LEAGUE_LOSS = 1;
 
+  const isDraw = match.winner_id === null && !match.forfeited_by;
   const isWinner = match.winner_id === userId;
-  const points = isWinner ? LEAGUE_WIN : LEAGUE_LOSS;
+  const points = isWinner ? LEAGUE_WIN : isDraw ? LEAGUE_DRAW : LEAGUE_LOSS;
 
   const { data: prof } = await supabase
     .from("profiles")

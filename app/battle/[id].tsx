@@ -10,6 +10,7 @@ import Animated, {
   withDelay,
   withRepeat,
   withSequence,
+  withSpring,
   cancelAnimation,
   Easing,
   FadeIn,
@@ -18,14 +19,20 @@ import Animated, {
   ZoomIn,
 } from "react-native-reanimated";
 import ViewShot from "react-native-view-shot";
-import { useEffect, useState } from "react";
+import * as Haptics from "expo-haptics";
+import { useEffect, useRef, useState } from "react";
 import { useBattle } from "@/hooks/useBattle";
 import { useAuth } from "@/contexts/AuthContext";
 import { useShareCard } from "@/hooks/useShareCard";
 import { ShareCard } from "@/components/ShareCard";
 import { createBotMatch } from "@/lib/supabase";
 import { TierPromotion } from "@/components/TierPromotion";
+import { ScoreDots } from "@/components/ScoreDots";
 import { Confetti } from "@/components/Confetti";
+import { preloadSounds, playSound } from "@/lib/audio";
+import { getStreakMilestone } from "@/lib/streak";
+import { MilestoneToastQueue } from "@/components/MilestoneToast";
+import type { Milestone } from "@/components/MilestoneToast";
 
 // Animated number counter that counts from `from` to `to`
 function useCountAnimation(from: number, to: number, delay: number = 0, duration: number = 800) {
@@ -68,6 +75,7 @@ export default function BattleScreen() {
   const [promotionDismissed, setPromotionDismissed] = useState(false);
   const [showConfetti, setShowConfetti] = useState(false);
   const [showForfeitModal, setShowForfeitModal] = useState(false);
+  const [streakMilestones, setStreakMilestones] = useState<Milestone[]>([]);
 
   const battle = useBattle({
     matchId: id,
@@ -76,6 +84,11 @@ export default function BattleScreen() {
     opponentRating: opponentRating ? parseInt(opponentRating, 10) : undefined,
     isBotMatch: isBotMatch === "true",
   });
+
+  // Preload sounds on mount
+  useEffect(() => {
+    preloadSounds();
+  }, []);
 
   const timerWidth = useSharedValue(100);
 
@@ -97,6 +110,13 @@ export default function BattleScreen() {
       }
     }
   }, [battle.phase, battle.currentRound]);
+
+  // Countdown tick sound
+  useEffect(() => {
+    if (battle.phase === "countdown" && battle.countdown > 0) {
+      playSound("countdown");
+    }
+  }, [battle.countdown]);
 
   // Cancel timer animation when answer is submitted
   useEffect(() => {
@@ -126,6 +146,43 @@ export default function BattleScreen() {
     }
   }, [battle.phase]);
 
+  // Wrong-answer shake animation
+  const shakeX = useSharedValue(0);
+
+  const shakeStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: shakeX.value }],
+  }));
+
+  // Haptics + shake on round result
+  useEffect(() => {
+    if (battle.phase !== "result" || !battle.roundResult) return;
+    const playerCorrect = battle.selectedAnswer === battle.roundResult.correct_answer;
+    if (playerCorrect) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      playSound("correct");
+    } else {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      playSound("incorrect");
+      // Shake the wrong answer
+      shakeX.value = withSequence(
+        withTiming(-8, { duration: 50 }),
+        withTiming(8, { duration: 50 }),
+        withTiming(-6, { duration: 50 }),
+        withTiming(6, { duration: 50 }),
+        withTiming(-3, { duration: 40 }),
+        withTiming(3, { duration: 40 }),
+        withTiming(0, { duration: 30 }),
+      );
+    }
+  }, [battle.phase, battle.roundResult]);
+
+  // Reset shake on new round
+  useEffect(() => {
+    if (battle.phase === "countdown") {
+      shakeX.value = 0;
+    }
+  }, [battle.phase]);
+
   // Rating count-up animation
   const ratingChange = battle.matchResult?.rating_change ?? 0;
   const newRating = battle.matchResult?.new_rating ?? (profile?.rating ?? 0);
@@ -147,6 +204,41 @@ export default function BattleScreen() {
   useEffect(() => {
     if (battle.phase === "match_end" && battle.matchResult?.winner === "player") {
       setShowConfetti(true);
+    }
+  }, [battle.phase, battle.matchResult]);
+
+  // Victory/defeat/draw haptics
+  useEffect(() => {
+    if (battle.phase !== "match_end" || !battle.matchResult) return;
+    if (battle.matchResult.winner === "player") {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      playSound("victory");
+    } else if (battle.matchResult.winner === "tie") {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+      playSound("draw");
+    } else {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+      playSound("defeat");
+    }
+  }, [battle.phase, battle.matchResult]);
+
+  // Trigger streak milestone celebration
+  useEffect(() => {
+    if (battle.phase !== "match_end" || !battle.matchResult) return;
+    const { old_streak, new_streak } = battle.matchResult;
+    const milestone = getStreakMilestone(old_streak, new_streak);
+    if (milestone) {
+      setStreakMilestones([{
+        id: `streak_${milestone.days}`,
+        title: milestone.title,
+        subtitle: milestone.subtitle,
+        icon: milestone.icon,
+        color: milestone.color,
+      }]);
+      // Trigger confetti for major milestones
+      if ([30, 100, 365].includes(milestone.days)) {
+        setShowConfetti(true);
+      }
     }
   }, [battle.phase, battle.matchResult]);
 
@@ -222,6 +314,7 @@ export default function BattleScreen() {
     const isWinner = battle.matchResult
       ? battle.matchResult.winner === "player"
       : playerScore > opponentScore;
+    const isDraw = battle.matchResult?.winner === "tie";
 
     const xpEarned = battle.matchResult?.xp_earned ?? 0;
     const newLevel = battle.matchResult?.new_level ?? (profile?.level ?? 1);
@@ -238,6 +331,12 @@ export default function BattleScreen() {
           </View>
         )}
 
+        {/* Streak Milestone Toast */}
+        <MilestoneToastQueue
+          milestones={streakMilestones}
+          onComplete={() => setStreakMilestones([])}
+        />
+
         {/* Tier Promotion Celebration Overlay */}
         {promotedTo && !promotionDismissed && (
           <TierPromotion
@@ -253,7 +352,7 @@ export default function BattleScreen() {
           style={{ position: "absolute", left: -9999 }}
         >
           <ShareCard
-            isWinner={isWinner}
+            result={isDraw ? "draw" : isWinner ? "win" : "loss"}
             playerUsername={profile?.username ?? battle.player?.username ?? "Player"}
             playerScore={playerScore}
             opponentScore={opponentScore}
@@ -294,14 +393,21 @@ export default function BattleScreen() {
           {/* Victory/Defeat Text */}
           <Animated.Text
             entering={ZoomIn.delay(100).duration(400)}
-            className={`text-5xl font-bold tracking-wider mb-6 ${
-              isWinner ? "text-win" : "text-lose"
-            }`}
+            style={{
+              fontFamily: "Teko_700Bold",
+              fontSize: 72,
+              letterSpacing: 8,
+              lineHeight: 76,
+              color: isDraw ? "#FFFFFF" : isWinner ? "#10B981" : "#EF4444",
+              marginBottom: 24,
+            }}
           >
             {battle.matchResult?.is_forfeit
               ? isWinner
                 ? "FORFEIT WIN"
                 : "FORFEITED"
+              : isDraw
+              ? "DRAW"
               : isWinner
               ? "VICTORY"
               : "DEFEAT"}
@@ -317,7 +423,7 @@ export default function BattleScreen() {
               <View className="flex-row items-center justify-center">
                 <View className="items-center mr-8">
                   <Text className="text-gray-500 text-xs uppercase mb-1">You</Text>
-                  <TextBold className={`text-5xl ${isWinner ? "text-win" : "text-white"}`}>
+                  <TextBold className={`text-5xl ${isDraw ? "text-white" : isWinner ? "text-win" : "text-white"}`}>
                     {playerScore}
                   </TextBold>
                 </View>
@@ -326,7 +432,7 @@ export default function BattleScreen() {
                   <Text className="text-gray-500 text-xs uppercase mb-1">
                     {battle.opponent?.username ?? "Opponent"}
                   </Text>
-                  <TextBold className={`text-5xl ${!isWinner ? "text-lose" : "text-white"}`}>
+                  <TextBold className={`text-5xl ${isDraw ? "text-white" : !isWinner ? "text-lose" : "text-white"}`}>
                     {opponentScore}
                   </TextBold>
                 </View>
@@ -465,18 +571,8 @@ export default function BattleScreen() {
           <TextBold className="text-white">
             {battle.player?.username ?? "You"}
           </TextBold>
-          <View className="flex-row mt-1">
-            {[...Array(battle.totalRounds)].map((_, i) => (
-              <View
-                key={i}
-                className={`w-3 h-3 rounded-full mx-1 ${
-                  i < (battle.player?.score ?? 0)
-                    ? "bg-win"
-                    : "bg-dark-border"
-                }`}
-              />
-            ))}
-          </View>
+          <AnimatedScore score={battle.player?.score ?? 0} color="#10B981" />
+          <ScoreDots score={battle.player?.score ?? 0} totalRounds={battle.totalRounds} color="bg-win" />
         </View>
 
         <View className="items-center">
@@ -490,18 +586,8 @@ export default function BattleScreen() {
           <Text className="text-white font-bold">
             {battle.opponent?.username ?? "Opponent"}
           </Text>
-          <View className="flex-row mt-1">
-            {[...Array(battle.totalRounds)].map((_, i) => (
-              <View
-                key={i}
-                className={`w-3 h-3 rounded-full mx-1 ${
-                  i < (battle.opponent?.score ?? 0)
-                    ? "bg-lose"
-                    : "bg-dark-border"
-                }`}
-              />
-            ))}
-          </View>
+          <AnimatedScore score={battle.opponent?.score ?? 0} color="#EF4444" />
+          <ScoreDots score={battle.opponent?.score ?? 0} totalRounds={battle.totalRounds} color="bg-lose" />
         </View>
       </View>
 
@@ -567,9 +653,8 @@ export default function BattleScreen() {
                   bgClass = "bg-primary/20 border-primary";
                 }
 
-                return (
+                const optionContent = (
                   <Pressable
-                    key={index}
                     onPress={() => battle.submitAnswer(index)}
                     disabled={battle.selectedAnswer !== null || showResult}
                     className={`p-4 rounded-xl border ${bgClass} mb-3`}
@@ -607,6 +692,14 @@ export default function BattleScreen() {
                       )}
                     </View>
                   </Pressable>
+                );
+
+                return isWrongSelected ? (
+                  <Animated.View key={index} style={shakeStyle}>
+                    {optionContent}
+                  </Animated.View>
+                ) : (
+                  <View key={index}>{optionContent}</View>
                 );
               })}
             </View>
@@ -668,25 +761,6 @@ export default function BattleScreen() {
         )}
       </ScrollView>
 
-      {/* Reactions Bar */}
-      {battle.phase === "question" && (
-        <View className="flex-row justify-center space-x-4 pb-4">
-          {[
-            { icon: "eye-outline" as const, color: "#60A5FA" },
-            { icon: "flame" as const, color: "#F97316" },
-            { icon: "skull-outline" as const, color: "#A78BFA" },
-            { icon: "bulb-outline" as const, color: "#FBBF24" },
-          ].map((reaction) => (
-            <Pressable
-              key={reaction.icon}
-              onPress={() => battle.sendReaction(reaction.icon)}
-              className="w-12 h-12 bg-dark-card rounded-full items-center justify-center border border-dark-border"
-            >
-              <Ionicons name={reaction.icon} size={24} color={reaction.color} />
-            </Pressable>
-          ))}
-        </View>
-      )}
     </SafeAreaView>
   );
 }
@@ -739,6 +813,29 @@ function ForfeitModal({
         </Pressable>
       </Pressable>
     </Modal>
+  );
+}
+
+function AnimatedScore({ score, color }: { score: number; color: string }) {
+  const scale = useSharedValue(1);
+  const prevScore = useRef(score);
+
+  useEffect(() => {
+    if (score > prevScore.current) {
+      scale.value = 0;
+      scale.value = withSpring(1, { damping: 8, stiffness: 200, mass: 0.6 });
+    }
+    prevScore.current = score;
+  }, [score]);
+
+  const animStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+  }));
+
+  return (
+    <Animated.View style={animStyle}>
+      <TextBold style={{ fontSize: 24, color }}>{score}</TextBold>
+    </Animated.View>
   );
 }
 

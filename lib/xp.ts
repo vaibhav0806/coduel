@@ -66,13 +66,13 @@ export function getLevelFromXP(totalXP: number): {
   }
 }
 
-export function calculateMatchXP(isWin: boolean): {
+export function calculateMatchXP(result: "win" | "loss" | "draw"): {
   baseXP: number;
   bonusXP: number;
   totalXP: number
 } {
   const baseXP = XP_CONFIG.GAME_PLAYED;
-  const bonusXP = isWin ? XP_CONFIG.WIN_BONUS : 0;
+  const bonusXP = result === "win" ? XP_CONFIG.WIN_BONUS : 0;
   return {
     baseXP,
     bonusXP,

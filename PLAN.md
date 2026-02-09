@@ -1,4 +1,4 @@
-# Coduel - Code Duel App
+# GitGud - Code Battle App
 
 > The Duolingo/Matiks for coding. Dead simple. Addictive. Competitive.
 
@@ -176,7 +176,7 @@ Why this type:
 ```
 ┌─────────────────────────────┐
 │                             │
-│      ⚡ CODUEL ⚡         │
+│      ⚡ GITGUD ⚡         │
 │                             │
 │    🔥 12 day streak         │
 │                             │
@@ -288,7 +288,7 @@ Why this type:
 ```
 ┌─────────────────────────────┐
 │                             │
-│      ⚡ CODUEL ⚡         │
+│      ⚡ GITGUD ⚡         │
 │                             │
 │    @username WINS           │
 │                             │
@@ -297,7 +297,7 @@ Why this type:
 │    🔥 12 day streak         │
 │                             │
 │    Think you can beat me?   │
-│    coduel.app/challenge  │
+│    gitgud.app/challenge  │
 │                             │
 └─────────────────────────────┘
 ```
@@ -661,7 +661,7 @@ Primary market is India (TikTok banned). Focus on platforms that dominate there.
 [Split screen of live battle]
 [Dramatic music]
 [Close finish]
-"This is why I'm addicted to Coduel"
+"This is why I'm addicted to GitGud"
 ```
 
 3. **Rank Climb Compilations**
@@ -720,7 +720,7 @@ CTA: Download now
 **Concept 4: The College Angle** (India-specific)
 ```
 "My placement prep"
-[Shows Coduel battles]
+[Shows GitGud battles]
 "10 minutes a day"
 [Shows improvement]
 "Better than mass DSA grinding"
@@ -869,7 +869,7 @@ Why 3 battles, not 1: One battle could be accidental. Three shows intent.
 | Bots for matchmaking? | ✅ Yes, seamless bots after 5 seconds. Don't tell user it's a bot. |
 | Anti-cheat? | Speed-based scoring + large question pool. No perfect solution, but good enough. |
 | Question sourcing? | GPT-4 generation with human review. Community submissions in Phase 4. |
-| App name? | **Coduel** (code + duel) |
+| App name? | **GitGud** (code + duel) |
 
 ---
 
@@ -1131,7 +1131,7 @@ Blocks unlock progressively (12 at start → 66 at max level) to avoid overwhelm
 |----------|-------------------|
 | Visual style for bots | Robots? Characters? Abstract shapes? Coding mascots? |
 | Monetization | Premium blocks? Cosmetic bots? Clan perks? |
-| Standalone or integrated? | Same app or separate "Coduel Teams" app? |
+| Standalone or integrated? | Same app or separate "GitGud Teams" app? |
 | Battle length | 2 min? 3 min? 5 min? |
 
 ### Timeline
@@ -1153,7 +1153,7 @@ Team Mode is a **major expansion**, not MVP. Ship core app first, validate reten
 ## Next Steps
 
 ### Week 1: Foundation
-1. ~~Pick final app name~~ → **Coduel**
+1. ~~Pick final app name~~ → **GitGud**
 2. Set up React Native + Expo project
 3. Configure Supabase (auth, database, broadcast)
 4. Design system: colors, typography, components

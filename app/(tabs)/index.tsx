@@ -45,6 +45,7 @@ import { Match } from "@/types/database";
 import { getWeekStart } from "@/lib/league";
 import { getTierConfig } from "@/lib/rating";
 import { LanguageSelector } from "@/components/LanguageSelector";
+import { getLocalDateString, daysBetween } from "@/lib/streak";
 
 interface RecentMatch {
   id: string;
@@ -71,10 +72,12 @@ export default function HomeScreen() {
   const [recentMatches, setRecentMatches] = useState<RecentMatch[]>([]);
   const [displayRating, setDisplayRating] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
+  const [showStreakWarning, setShowStreakWarning] = useState(false);
   const channelRef = useRef<RealtimeChannel | null>(null);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const hasAnimated = useRef(false);
+  const streakWarningShown = useRef(false);
 
   const buttonScale = useSharedValue(1);
   const glowOpacity = useSharedValue(0.15);
@@ -259,6 +262,23 @@ export default function HomeScreen() {
   // Check for milestones when profile updates
   useEffect(() => {
     checkMilestones(profile);
+  }, [profile]);
+
+  // Streak break warning — show once per mount when streak is at risk
+  useEffect(() => {
+    if (streakWarningShown.current || !profile) return;
+    const currentStreak = profile.current_streak ?? 0;
+    const lastBattle = profile.last_battle_date;
+    if (currentStreak < 2 || !lastBattle) return;
+
+    const today = getLocalDateString();
+    const lastDate = getLocalDateString(new Date(lastBattle));
+    const gap = daysBetween(lastDate, today);
+
+    if (gap >= 1) {
+      streakWarningShown.current = true;
+      setShowStreakWarning(true);
+    }
   }, [profile]);
 
   const fetchLeagueData = async () => {
@@ -1139,6 +1159,52 @@ export default function HomeScreen() {
         milestones={milestones}
         onComplete={clearMilestones}
       />
+
+      {/* Streak Break Warning Modal */}
+      <Modal
+        visible={showStreakWarning}
+        transparent
+        animationType="fade"
+        statusBarTranslucent
+        onRequestClose={() => setShowStreakWarning(false)}
+      >
+        <Pressable
+          onPress={() => setShowStreakWarning(false)}
+          className="flex-1 bg-black/70 items-center justify-center px-8"
+        >
+          <Pressable
+            onPress={(e) => e.stopPropagation()}
+            className="w-full bg-dark-card border border-dark-border rounded-2xl overflow-hidden"
+          >
+            <View className="p-6 items-center">
+              <Ionicons name="flame" size={48} color="#FF6B35" />
+              <TextBold className="text-white text-xl mt-4 mb-2 text-center">
+                Your {profile?.current_streak ?? 0}-day streak is at risk!
+              </TextBold>
+              <Text className="text-gray-400 text-sm text-center leading-5">
+                Play a match today to keep your streak alive.
+              </Text>
+            </View>
+            <View className="px-6 pb-6" style={{ gap: 10 }}>
+              <Pressable
+                onPress={() => {
+                  setShowStreakWarning(false);
+                  handleBattle();
+                }}
+                className="bg-[#FF6B35] rounded-xl py-3.5 items-center active:opacity-80"
+              >
+                <TextBold className="text-white text-base">Play Now</TextBold>
+              </Pressable>
+              <Pressable
+                onPress={() => setShowStreakWarning(false)}
+                className="py-2.5 items-center"
+              >
+                <TextMedium className="text-gray-500">Later</TextMedium>
+              </Pressable>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
 
       {/* Matchmaking Overlay */}
       <Modal visible={isMatchmaking} transparent animationType="fade">

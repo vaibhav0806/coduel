@@ -7,7 +7,6 @@ import Animated, {
   withTiming,
   withRepeat,
   withSequence,
-  Easing,
 } from "react-native-reanimated";
 
 interface AnimatedLogoProps {
@@ -17,9 +16,9 @@ interface AnimatedLogoProps {
 }
 
 const sizeConfig = {
-  small: { fontSize: 24, cursorWidth: 2 },
-  medium: { fontSize: 36, cursorWidth: 2 },
-  large: { fontSize: 48, cursorWidth: 3 },
+  small: { fontSize: 24, cursorWidth: 2, cursorHeight: 20 },
+  medium: { fontSize: 36, cursorWidth: 2, cursorHeight: 30 },
+  large: { fontSize: 48, cursorWidth: 3, cursorHeight: 40 },
 };
 
 export function AnimatedLogo({
@@ -28,23 +27,21 @@ export function AnimatedLogo({
   onAnimationComplete,
 }: AnimatedLogoProps) {
   const config = sizeConfig[size];
-  const [displayText, setDisplayText] = useState(animate ? "" : "oduel");
-  const [showClosing, setShowClosing] = useState(!animate);
+  const fullText = "git gud";
+  const [displayText, setDisplayText] = useState(animate ? "" : fullText);
+  const [typingDone, setTypingDone] = useState(!animate);
 
-  // Animation values
   const cursorOpacity = useSharedValue(1);
-
-  const text = "oduel";
 
   useEffect(() => {
     if (!animate) {
-      setDisplayText(text);
-      setShowClosing(true);
+      setDisplayText(fullText);
+      setTypingDone(true);
       cursorOpacity.value = 0;
       return;
     }
 
-    // Blinking cursor animation - faster blink
+    // Blinking cursor
     cursorOpacity.value = withRepeat(
       withSequence(
         withTiming(0, { duration: 400 }),
@@ -54,25 +51,24 @@ export function AnimatedLogo({
       false
     );
 
-    // Type out letters one by one - crisp and quick (80ms per letter)
+    // Type out letters one by one
     let currentIndex = 0;
     const typeInterval = setInterval(() => {
-      if (currentIndex < text.length) {
-        setDisplayText(text.substring(0, currentIndex + 1));
+      if (currentIndex < fullText.length) {
+        setDisplayText(fullText.substring(0, currentIndex + 1));
         currentIndex++;
       } else {
         clearInterval(typeInterval);
-        // Show closing bracket immediately after typing
-        setShowClosing(true);
-        cursorOpacity.value = withTiming(0, { duration: 150 });
-        // Quick callback after bracket appears
+        setTypingDone(true);
+        // Keep cursor blinking after typing
         setTimeout(() => {
+          cursorOpacity.value = withTiming(0, { duration: 150 });
           if (onAnimationComplete) {
             onAnimationComplete();
           }
-        }, 300);
+        }, 400);
       }
-    }, 80); // 80ms per letter = crisp typing
+    }, 90);
 
     return () => clearInterval(typeInterval);
   }, [animate]);
@@ -81,44 +77,41 @@ export function AnimatedLogo({
     opacity: cursorOpacity.value,
   }));
 
+  // Split displayText to color "git" and "gud" differently
+  const gitPart = displayText.substring(0, Math.min(3, displayText.length));
+  const restPart = displayText.substring(3);
+
   return (
     <View className="flex-row items-center justify-center">
-      {/* Opening bracket */}
+      {/* Terminal prompt */}
       <TextBold style={{ fontSize: config.fontSize, color: "#39FF14" }}>
-        {"<"}
+        {"$ "}
       </TextBold>
 
-      {/* Typed text */}
-      <TextBold
-        style={{
-          fontSize: config.fontSize,
-          color: "#FFFFFF",
-        }}
-      >
-        {displayText}
+      {/* "git" part - white */}
+      <TextBold style={{ fontSize: config.fontSize, color: "#FFFFFF" }}>
+        {gitPart}
+      </TextBold>
+
+      {/* " gud" part - neon green */}
+      <TextBold style={{ fontSize: config.fontSize, color: "#39FF14" }}>
+        {restPart}
       </TextBold>
 
       {/* Blinking cursor */}
-      {!showClosing && (
+      {!typingDone && (
         <Animated.View
           style={[
             cursorAnimatedStyle,
             {
               width: config.cursorWidth,
-              height: config.fontSize * 0.8,
+              height: config.cursorHeight,
               backgroundColor: "#39FF14",
               marginLeft: 2,
               borderRadius: 1,
             },
           ]}
         />
-      )}
-
-      {/* Closing bracket - appears after text is done */}
-      {showClosing && (
-        <TextBold style={{ fontSize: config.fontSize, color: "#39FF14" }}>
-          {"/>"}
-        </TextBold>
       )}
     </View>
   );
@@ -131,13 +124,13 @@ export function Logo({ size = "medium" }: { size?: "small" | "medium" | "large" 
   return (
     <View className="flex-row items-center">
       <TextBold style={{ fontSize: config.fontSize, color: "#39FF14" }}>
-        {"<"}
+        {"$ "}
       </TextBold>
       <TextBold style={{ fontSize: config.fontSize, color: "#FFFFFF" }}>
-        oduel
+        git
       </TextBold>
       <TextBold style={{ fontSize: config.fontSize, color: "#39FF14" }}>
-        {"/>"}
+        {" gud"}
       </TextBold>
     </View>
   );

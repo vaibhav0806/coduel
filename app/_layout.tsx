@@ -30,7 +30,7 @@ export const unstable_settings = {
 SplashScreen.preventAutoHideAsync();
 
 // Custom dark theme matching our brand - Neon Green
-const CoduelDarkTheme = {
+const GitGudDarkTheme = {
   ...DarkTheme,
   colors: {
     ...DarkTheme.colors,
@@ -83,7 +83,7 @@ function NotificationManager() {
 
 function RootLayoutNav() {
   return (
-    <ThemeProvider value={CoduelDarkTheme}>
+    <ThemeProvider value={GitGudDarkTheme}>
       <StatusBar style="light" />
       <AuthProvider>
         <NotificationManager />
@@ -108,7 +108,7 @@ function RootLayoutNav() {
               options={{
                 headerShown: false,
                 presentation: "fullScreenModal",
-                animation: "fade",
+                animation: "slide_from_bottom",
               }}
             />
             <Stack.Screen
@@ -123,6 +123,7 @@ function RootLayoutNav() {
               options={{
                 headerShown: false,
                 gestureEnabled: false,
+                animation: "fade",
               }}
             />
             <Stack.Screen
@@ -136,6 +137,7 @@ function RootLayoutNav() {
               name="modal"
               options={{
                 presentation: "modal",
+                animation: "slide_from_bottom",
                 title: "Settings",
                 headerStyle: { backgroundColor: "#0A0A0F" },
                 headerTintColor: "#FFFFFF",
