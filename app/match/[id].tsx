@@ -203,7 +203,7 @@ export default function MatchReviewScreen() {
   const { match, rounds, opponentName, opponentRating, opponentId, playerScore, opponentScore, ratingChange, result, isBotMatch, forfeitedBy } = detail;
   const totalRounds = rounds.length;
   const won = result === "win";
-  const isForfeit = forfeitedBy !== null;
+  const isForfeit = !!forfeitedBy;
   const playerForfeited = forfeitedBy === userId;
 
   return (
