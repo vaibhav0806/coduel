@@ -316,7 +316,6 @@ export default function BattleScreen() {
       : playerScore > opponentScore;
     const isDraw = battle.matchResult?.winner === "tie";
 
-    const xpEarned = battle.matchResult?.xp_earned ?? 0;
     const newLevel = battle.matchResult?.new_level ?? (profile?.level ?? 1);
     const leveledUp = battle.matchResult?.leveled_up ?? false;
     const isComeback = battle.matchResult?.is_comeback ?? false;
@@ -466,14 +465,18 @@ export default function BattleScreen() {
                 </View>
               )}
 
-              {/* XP Earned */}
-              <View className="flex-row items-center justify-between mb-4">
-                <Text className="text-gray-500">XP Earned</Text>
-                <View className="flex-row items-center">
-                  <Ionicons name="star" size={16} color="#39FF14" />
-                  <TextBold className="text-primary text-lg ml-1">+{xpEarned}</TextBold>
+              {/* League Points (only for ranked) */}
+              {battle.isRanked && (
+                <View className="flex-row items-center justify-between mb-4">
+                  <Text className="text-gray-500">League Points</Text>
+                  <View className="flex-row items-center">
+                    <Ionicons name="trophy" size={16} color="#F59E0B" />
+                    <TextBold className="text-amber-400 text-lg ml-1">
+                      +{isDraw ? 2 : isWinner ? 3 : 1}
+                    </TextBold>
+                  </View>
                 </View>
-              </View>
+              )}
 
               {/* Level */}
               <View className="flex-row items-center justify-between">

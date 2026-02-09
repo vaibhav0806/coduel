@@ -33,7 +33,7 @@ export function calculateRatingChange(
   const adjustment = Math.round(ratingDiff / 50);
 
   let winnerDelta = Math.max(5, baseWin + adjustment);
-  let loserDelta = Math.max(5, baseLoss - adjustment);
+  let loserDelta = Math.max(5, baseLoss + adjustment);
 
   if (isComeback) {
     winnerDelta += 5;

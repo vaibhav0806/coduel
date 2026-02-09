@@ -797,6 +797,7 @@ export function useBattle({
     isPlayer1,
     timedOut,
     waitingForOpponent,
+    isRanked: isRankedRef.current,
     submitAnswer: handleSubmitAnswer,
     handleForfeit,
     opponentForfeited,
