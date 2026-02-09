@@ -99,6 +99,41 @@ async function handleJoinQueue(
   if (opponents && opponents.length > 0) {
     const opponent = opponents[0];
 
+    // Guard: check if opponent is stale (already in a match).
+    // Two checks cover all cases:
+    // 1. Any match started after they joined queue (covers completed/forfeited matches)
+    // 2. Any currently active match with no winner (covers in-progress matches even if
+    //    started slightly before joined_at due to eager bot match creation on old clients)
+    const activeCutoff = new Date(Date.now() - 600000).toISOString();
+    const [{ count: staleCount }, { count: activeCount }] = await Promise.all([
+      supabase
+        .from("matches")
+        .select("id", { count: "exact", head: true })
+        .or(`player1_id.eq.${opponent.user_id},player2_id.eq.${opponent.user_id}`)
+        .gte("started_at", opponent.joined_at),
+      supabase
+        .from("matches")
+        .select("id", { count: "exact", head: true })
+        .or(`player1_id.eq.${opponent.user_id},player2_id.eq.${opponent.user_id}`)
+        .gte("started_at", activeCutoff)
+        .is("winner_id", null)
+        .is("forfeited_by", null),
+    ]);
+
+    if ((staleCount ?? 0) > 0 || (activeCount ?? 0) > 0) {
+      // Opponent is stale or in an active match — remove and queue ourselves instead.
+      await supabase.from("match_queue").delete().eq("id", opponent.id);
+      const { error: insertError } = await supabase.from("match_queue").insert({
+        user_id: userId,
+        rating: profile.rating,
+        is_ranked: isRanked,
+      });
+      if (insertError) {
+        return jsonResponse({ error: "Failed to join queue" }, 500);
+      }
+      return jsonResponse({ status: "queued" });
+    }
+
     // Remove opponent from queue
     await supabase.from("match_queue").delete().eq("id", opponent.id);
 

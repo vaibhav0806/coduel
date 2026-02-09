@@ -70,6 +70,7 @@ export default function HomeScreen() {
     profile?.preferred_language ?? null
   );
   const [recentMatches, setRecentMatches] = useState<RecentMatch[]>([]);
+  const [globalRank, setGlobalRank] = useState<number | null>(null);
   const [displayRating, setDisplayRating] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
   const [showStreakWarning, setShowStreakWarning] = useState(false);
@@ -243,6 +244,7 @@ export default function HomeScreen() {
     useCallback(() => {
       refreshProfile();
       if (user) {
+        fetchGlobalRank();
         fetchLeagueData();
         fetchRecentMatches();
       }
@@ -253,6 +255,7 @@ export default function HomeScreen() {
     setRefreshing(true);
     await Promise.all([
       refreshProfile(),
+      user ? fetchGlobalRank() : Promise.resolve(),
       user ? fetchLeagueData() : Promise.resolve(),
       user ? fetchRecentMatches() : Promise.resolve(),
     ]);
@@ -280,6 +283,21 @@ export default function HomeScreen() {
       setShowStreakWarning(true);
     }
   }, [profile]);
+
+  const fetchGlobalRank = async () => {
+    if (!user) return;
+    const { data: fresh } = await supabase
+      .from("profiles")
+      .select("rating")
+      .eq("id", user.id)
+      .single();
+    if (!fresh) return;
+    const { count } = await supabase
+      .from("profiles")
+      .select("id", { count: "exact", head: true })
+      .gt("rating", fresh.rating);
+    setGlobalRank((count ?? 0) + 1);
+  };
 
   const fetchLeagueData = async () => {
     if (!user) return;
@@ -409,6 +427,10 @@ export default function HomeScreen() {
       clearInterval(pollRef.current);
       pollRef.current = null;
     }
+    // Always remove from queue to prevent ghost matches
+    if (user) {
+      leaveMatchQueue(user.id).catch(() => {});
+    }
   };
 
   // Cleanup on unmount
@@ -462,17 +484,14 @@ export default function HomeScreen() {
       })
       .subscribe();
 
-    // 2. Start creating bot match in the background
-    const botMatchPromise = createBotMatch(user.id, true, selectedLanguage);
-
-    // 3. Bot fallback after 10s
+    // 2. Bot fallback after 10s — only create bot match when timeout fires
     timeoutRef.current = setTimeout(async () => {
       if (navigated) return;
       navigated = true;
       cleanupMatchmaking();
 
       try {
-        const result = await botMatchPromise;
+        const result = await createBotMatch(user.id, true, selectedLanguage);
         navigateToBattle(
           result.match_id,
           result.opponent_username,
@@ -485,7 +504,7 @@ export default function HomeScreen() {
       }
     }, 10000);
 
-    // 4. Join the match queue
+    // 3. Join the match queue
     try {
       const result = await joinMatchQueue(user.id, true, selectedLanguage);
 
@@ -501,7 +520,7 @@ export default function HomeScreen() {
         return;
       }
 
-      // 5. Start polling every 2s for opponents who joined after us
+      // 4. Start polling every 2s for opponents who joined after us
       //    Handles the race where both players insert simultaneously
       pollRef.current = setInterval(async () => {
         if (navigated) {
@@ -764,7 +783,7 @@ export default function HomeScreen() {
             {/* Rank */}
             <View className="items-center px-4">
               <TextBold style={{ fontSize: 16, color: "#FFFFFF" }}>
-                #{leagueData?.position ?? "—"}
+                #{globalRank ?? "—"}
               </TextBold>
               <Text
                 className="text-gray-500 text-xs mt-0.5"
