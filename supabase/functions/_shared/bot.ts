@@ -31,15 +31,15 @@ interface BotConfig {
 export function getBotConfigForDifficulty(difficulty: number): BotConfig {
   switch (difficulty) {
     case 1:
-      return { accuracy: 0.87, minTimeMs: 2000, maxTimeMs: 5000 };
+      return { accuracy: 0.82, minTimeMs: 2000, maxTimeMs: 5000 };
     case 2:
-      return { accuracy: 0.82, minTimeMs: 3000, maxTimeMs: 7000 };
+      return { accuracy: 0.77, minTimeMs: 3000, maxTimeMs: 7000 };
     case 3:
-      return { accuracy: 0.77, minTimeMs: 4000, maxTimeMs: 9000 };
+      return { accuracy: 0.72, minTimeMs: 4000, maxTimeMs: 9000 };
     case 4:
-      return { accuracy: 0.72, minTimeMs: 5000, maxTimeMs: 11000 };
+      return { accuracy: 0.67, minTimeMs: 5000, maxTimeMs: 11000 };
     default:
-      return { accuracy: 0.80, minTimeMs: 3000, maxTimeMs: 8000 };
+      return { accuracy: 0.75, minTimeMs: 3000, maxTimeMs: 8000 };
   }
 }
 
