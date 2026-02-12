@@ -53,7 +53,7 @@ interface RecentMatch {
   playerScore: number;
   opponentScore: number;
   ratingChange: number | null;
-  won: boolean;
+  result: "win" | "loss" | "draw";
 }
 
 export default function HomeScreen() {
@@ -407,7 +407,11 @@ export default function HomeScreen() {
         playerScore: isP1 ? m.player1_score : m.player2_score,
         opponentScore: isP1 ? m.player2_score : m.player1_score,
         ratingChange: isP1 ? m.player1_rating_change : m.player2_rating_change,
-        won: m.winner_id === user.id,
+        result: m.winner_id === user.id
+          ? "win"
+          : m.player1_score === m.player2_score
+            ? "draw"
+            : "loss",
       };
     });
 
@@ -1060,20 +1064,19 @@ export default function HomeScreen() {
               <>
                 {/* W/L indicator strip */}
                 <View className="flex-row px-4 pb-3" style={{ gap: 4 }}>
-                  {recentMatches.map((m) => (
+                  {recentMatches.map((m) => {
+                    const color = m.result === "win" ? "#10B981" : m.result === "draw" ? "#6B7280" : "#EF4444";
+                    const label = m.result === "win" ? "W" : m.result === "draw" ? "D" : "L";
+                    return (
                     <View
                       key={m.id}
                       style={{
                         width: 20,
                         height: 20,
                         borderRadius: 4,
-                        backgroundColor: m.won
-                          ? "rgba(16, 185, 129, 0.15)"
-                          : "rgba(239, 68, 68, 0.15)",
+                        backgroundColor: `${color}25`,
                         borderWidth: 1,
-                        borderColor: m.won
-                          ? "rgba(16, 185, 129, 0.3)"
-                          : "rgba(239, 68, 68, 0.3)",
+                        borderColor: `${color}4D`,
                         alignItems: "center",
                         justifyContent: "center",
                       }}
@@ -1081,13 +1084,14 @@ export default function HomeScreen() {
                       <TextBold
                         style={{
                           fontSize: 9,
-                          color: m.won ? "#10B981" : "#EF4444",
+                          color,
                         }}
                       >
-                        {m.won ? "W" : "L"}
+                        {label}
                       </TextBold>
                     </View>
-                  ))}
+                    );
+                  })}
                 </View>
 
                 {/* Last 3 match rows */}
@@ -1112,7 +1116,7 @@ export default function HomeScreen() {
                         width: 3,
                         height: 28,
                         borderRadius: 1.5,
-                        backgroundColor: m.won ? "#10B981" : "#EF4444",
+                        backgroundColor: m.result === "win" ? "#10B981" : m.result === "draw" ? "#6B7280" : "#EF4444",
                         marginRight: 10,
                       }}
                     />
@@ -1127,7 +1131,7 @@ export default function HomeScreen() {
                     <TextSemibold
                       style={{
                         fontSize: 13,
-                        color: m.won ? "#10B981" : "#EF4444",
+                        color: m.result === "win" ? "#10B981" : m.result === "draw" ? "#6B7280" : "#EF4444",
                         minWidth: 32,
                         textAlign: "right",
                       }}

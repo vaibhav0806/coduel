@@ -1,7 +1,7 @@
-import { View, FlatList, Pressable, RefreshControl } from "react-native";
+import { View, FlatList, Pressable, RefreshControl, TextInput, ActivityIndicator } from "react-native";
 import { Text, TextBold, TextSemibold, TextMedium } from "@/components/ui/Text";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef } from "react";
 import { useFocusEffect, router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
@@ -155,6 +155,65 @@ export default function LeaderboardScreen() {
   const [currentUserEntry, setCurrentUserEntry] = useState<LeaderboardEntry | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+
+  // Search state
+  const [searchActive, setSearchActive] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<LeaderboardEntry[]>([]);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const searchInputRef = useRef<TextInput>(null);
+
+  const handleSearch = useCallback((query: string) => {
+    setSearchQuery(query);
+
+    if (searchDebounceRef.current) {
+      clearTimeout(searchDebounceRef.current);
+    }
+
+    if (query.length < 2) {
+      setSearchResults([]);
+      setSearchLoading(false);
+      return;
+    }
+
+    setSearchLoading(true);
+    searchDebounceRef.current = setTimeout(async () => {
+      try {
+        const { data } = await supabase
+          .from("profiles")
+          .select("id, username, rating, tier")
+          .ilike("username", `%${query}%`)
+          .order("rating", { ascending: false })
+          .limit(20);
+
+        setSearchResults(
+          (data ?? []).map((p, i) => ({
+            id: p.id,
+            username: p.username,
+            rating: p.rating,
+            tier: p.tier,
+            rank: i + 1,
+          }))
+        );
+      } catch (err) {
+        console.error("Search failed:", err);
+        setSearchResults([]);
+      } finally {
+        setSearchLoading(false);
+      }
+    }, 300);
+  }, []);
+
+  const dismissSearch = useCallback(() => {
+    setSearchActive(false);
+    setSearchQuery("");
+    setSearchResults([]);
+    setSearchLoading(false);
+    if (searchDebounceRef.current) {
+      clearTimeout(searchDebounceRef.current);
+    }
+  }, []);
 
   useFocusEffect(
     useCallback(() => {
@@ -551,6 +610,86 @@ export default function LeaderboardScreen() {
     );
   };
 
+  const renderSearchItem = ({ item, index }: { item: LeaderboardEntry; index: number }) => {
+    const isCurrentUser = item.id === user?.id;
+    const itemTierConfig = getTierConfig(item.rating);
+
+    return (
+      <Pressable
+        onPress={() => router.push({ pathname: "/user/[id]", params: { id: item.id } })}
+      >
+        <View className="mx-6 mb-2">
+          <View
+            className={`flex-row items-center py-3 px-4 rounded-xl ${
+              isCurrentUser
+                ? "bg-primary/5 border border-primary/40"
+                : "bg-dark-card border border-dark-border"
+            }`}
+            style={{ overflow: "hidden" }}
+          >
+            {isCurrentUser && (
+              <View
+                style={{
+                  position: "absolute",
+                  left: 0,
+                  top: 0,
+                  bottom: 0,
+                  width: 3,
+                  borderTopLeftRadius: 12,
+                  borderBottomLeftRadius: 12,
+                  overflow: "hidden",
+                }}
+              >
+                <LinearGradient
+                  colors={["#39FF14", "#32E012"]}
+                  style={{ flex: 1 }}
+                />
+              </View>
+            )}
+
+            {/* Tier dot */}
+            <View
+              style={{
+                width: 8,
+                height: 8,
+                borderRadius: 4,
+                backgroundColor: itemTierConfig.colors[0],
+                marginRight: 10,
+              }}
+            />
+
+            {/* Username & tier label */}
+            <View className="flex-1">
+              <TextSemibold
+                className={isCurrentUser ? "text-primary-light" : "text-white"}
+                style={{ fontSize: 14 }}
+                numberOfLines={1}
+              >
+                {item.username}
+              </TextSemibold>
+              <TextMedium className="text-gray-500" style={{ fontSize: 11 }}>
+                {itemTierConfig.label}
+              </TextMedium>
+            </View>
+
+            {/* Rating */}
+            <View className="items-end">
+              <TextBold className="text-white" style={{ fontSize: 16 }}>
+                {item.rating}
+              </TextBold>
+              <Text
+                className="text-gray-500"
+                style={{ fontSize: 9, letterSpacing: 0.5, textTransform: "uppercase" }}
+              >
+                rating
+              </Text>
+            </View>
+          </View>
+        </View>
+      </Pressable>
+    );
+  };
+
   const renderHeader = () => (
     <View>
       {renderContextBanner()}
@@ -580,84 +719,161 @@ export default function LeaderboardScreen() {
       {/* Section 1: Custom Header */}
       <Animated.View
         entering={FadeIn.duration(300)}
-        className="flex-row items-center px-6 pt-3 pb-2"
+        className="flex-row items-center justify-between px-6 pt-3 pb-2"
       >
         <TextBold className="text-white" style={{ fontSize: 20 }}>
           Leaderboard
         </TextBold>
+        {!searchActive && (
+          <Pressable
+            onPress={() => {
+              setSearchActive(true);
+              setTimeout(() => searchInputRef.current?.focus(), 100);
+            }}
+            hitSlop={8}
+          >
+            <Ionicons name="search-outline" size={22} color="#9CA3AF" />
+          </Pressable>
+        )}
       </Animated.View>
 
-      {/* Section 2: Tab Selector */}
-      <Animated.View
-        entering={FadeInDown.delay(100).duration(300)}
-        className="flex-row mx-6 mt-2 mb-4"
-      >
-        <Pressable
-          onPress={() => setActiveTab("global")}
-          className="flex-1 items-center pb-2"
-        >
-          <TextSemibold
-            className={activeTab === "global" ? "text-white" : "text-gray-500"}
-            style={{ fontSize: 14 }}
-          >
-            Global
-          </TextSemibold>
-          {activeTab === "global" && (
-            <View style={{ marginTop: 6, width: "40%", height: 3, borderRadius: 1.5, overflow: "hidden" }}>
-              <LinearGradient
-                colors={["#39FF14", "#32E012"]}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-                style={{ flex: 1 }}
-              />
-            </View>
-          )}
-        </Pressable>
-
-        {/* Subtle vertical divider */}
-        <View style={{ width: 1, height: 20, backgroundColor: "rgba(255,255,255,0.08)", alignSelf: "center" }} />
-
-        <Pressable
-          onPress={() => setActiveTab("weekly")}
-          className="flex-1 items-center pb-2"
-        >
-          <View className="flex-row items-center">
-            <TextSemibold
-              className={activeTab === "weekly" ? "text-white" : "text-gray-500"}
-              style={{ fontSize: 14 }}
-            >
-              League
-            </TextSemibold>
-            {activeTab === "weekly" && (
-              <View className="ml-2">
-                <LinearGradient
-                  colors={userTierConfig.colors}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 0 }}
-                  style={{ borderRadius: 8, paddingHorizontal: 6, paddingVertical: 2 }}
-                >
-                  <TextBold style={{ fontSize: 8, color: "#050508" }}>
-                    {userTierConfig.label}
-                  </TextBold>
-                </LinearGradient>
-              </View>
+      {/* Section 2: Search Bar or Tab Selector */}
+      {searchActive ? (
+        <View className="flex-row items-center mx-6 mt-2 mb-4">
+          <Pressable onPress={dismissSearch} hitSlop={8} className="mr-3">
+            <Ionicons name="arrow-back" size={22} color="#9CA3AF" />
+          </Pressable>
+          <View className="flex-1 flex-row items-center bg-dark-card border border-dark-border rounded-xl px-3 py-2">
+            <Ionicons name="search-outline" size={16} color="#6B7280" style={{ marginRight: 8 }} />
+            <TextInput
+              ref={searchInputRef}
+              value={searchQuery}
+              onChangeText={handleSearch}
+              placeholder="Search users..."
+              placeholderTextColor="#6B7280"
+              autoCapitalize="none"
+              autoCorrect={false}
+              style={{
+                flex: 1,
+                color: "#FFFFFF",
+                fontSize: 14,
+                fontFamily: "Inter_400Regular",
+                padding: 0,
+              }}
+            />
+            {searchQuery.length > 0 && (
+              <Pressable onPress={() => handleSearch("")} hitSlop={8}>
+                <Ionicons name="close-circle" size={18} color="#6B7280" />
+              </Pressable>
             )}
           </View>
-          {activeTab === "weekly" && (
-            <View style={{ marginTop: 6, width: "40%", height: 3, borderRadius: 1.5, overflow: "hidden" }}>
-              <LinearGradient
-                colors={["#39FF14", "#32E012"]}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-                style={{ flex: 1 }}
-              />
+        </View>
+      ) : (
+        <Animated.View
+          entering={FadeInDown.delay(100).duration(300)}
+          className="flex-row mx-6 mt-2 mb-4"
+        >
+          <Pressable
+            onPress={() => setActiveTab("global")}
+            className="flex-1 items-center pb-2"
+          >
+            <TextSemibold
+              className={activeTab === "global" ? "text-white" : "text-gray-500"}
+              style={{ fontSize: 14 }}
+            >
+              Global
+            </TextSemibold>
+            {activeTab === "global" && (
+              <View style={{ marginTop: 6, width: "40%", height: 3, borderRadius: 1.5, overflow: "hidden" }}>
+                <LinearGradient
+                  colors={["#39FF14", "#32E012"]}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={{ flex: 1 }}
+                />
+              </View>
+            )}
+          </Pressable>
+
+          {/* Subtle vertical divider */}
+          <View style={{ width: 1, height: 20, backgroundColor: "rgba(255,255,255,0.08)", alignSelf: "center" }} />
+
+          <Pressable
+            onPress={() => setActiveTab("weekly")}
+            className="flex-1 items-center pb-2"
+          >
+            <View className="flex-row items-center">
+              <TextSemibold
+                className={activeTab === "weekly" ? "text-white" : "text-gray-500"}
+                style={{ fontSize: 14 }}
+              >
+                League
+              </TextSemibold>
+              {activeTab === "weekly" && (
+                <View className="ml-2">
+                  <LinearGradient
+                    colors={userTierConfig.colors}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 0 }}
+                    style={{ borderRadius: 8, paddingHorizontal: 6, paddingVertical: 2 }}
+                  >
+                    <TextBold style={{ fontSize: 8, color: "#050508" }}>
+                      {userTierConfig.label}
+                    </TextBold>
+                  </LinearGradient>
+                </View>
+              )}
             </View>
-          )}
-        </Pressable>
-      </Animated.View>
+            {activeTab === "weekly" && (
+              <View style={{ marginTop: 6, width: "40%", height: 3, borderRadius: 1.5, overflow: "hidden" }}>
+                <LinearGradient
+                  colors={["#39FF14", "#32E012"]}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={{ flex: 1 }}
+                />
+              </View>
+            )}
+          </Pressable>
+        </Animated.View>
+      )}
 
       {/* Content */}
-      {loading ? (
+      {searchActive ? (
+        <View className="flex-1">
+          {searchLoading ? (
+            <View className="flex-1 items-center pt-16">
+              <ActivityIndicator size="small" color="#39FF14" />
+            </View>
+          ) : searchQuery.length < 2 ? (
+            <View className="flex-1 items-center pt-16 px-8">
+              <Ionicons name="search" size={40} color="#1A1A24" />
+              <Text className="text-gray-500 mt-3" style={{ fontSize: 14 }}>
+                Type a username to search
+              </Text>
+            </View>
+          ) : searchResults.length === 0 ? (
+            <View className="flex-1 items-center pt-16 px-8">
+              <Ionicons name="person-outline" size={40} color="#1A1A24" />
+              <TextSemibold className="text-white mt-3" style={{ fontSize: 15 }}>
+                No users found
+              </TextSemibold>
+              <Text className="text-gray-500 mt-1" style={{ fontSize: 13 }}>
+                Try a different username
+              </Text>
+            </View>
+          ) : (
+            <FlatList
+              data={searchResults}
+              renderItem={renderSearchItem}
+              keyExtractor={(item) => item.id}
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={{ paddingBottom: 20 }}
+              keyboardShouldPersistTaps="handled"
+            />
+          )}
+        </View>
+      ) : loading ? (
         <LeaderboardSkeleton />
       ) : leaderboard.length === 0 ? (
         <View className="flex-1 items-center justify-center px-8">

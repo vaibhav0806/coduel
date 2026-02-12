@@ -133,6 +133,7 @@ async function handleStartBattle(
       round_id: r.id,
       question: {
         id: q.id,
+        question_type: q.question_type ?? "mcq",
         code_snippet: q.code_snippet,
         question_text: q.question_text,
         options: q.options,

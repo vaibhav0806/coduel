@@ -23,6 +23,7 @@ import * as Notifications from "expo-notifications";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
 import { setSoundEnabled as setAudioSoundEnabled } from "@/lib/audio";
+import { useSupportUnread } from "@/hooks/useSupport";
 import {
   cancelAllReminders,
   setNotificationsEnabled as setNotifEnabledCache,
@@ -381,6 +382,8 @@ export default function SettingsScreen() {
     );
   };
 
+  const supportUnread = useSupportUnread();
+
   const selectedCountry = COUNTRIES.find((c) => c.code === country);
   const selectedLang =
     LANGUAGES.find((l) => l.id === preferredLanguage) ?? LANGUAGES[0];
@@ -606,6 +609,38 @@ export default function SettingsScreen() {
       {/* ABOUT section */}
       <SectionHeader title="About" />
       <View className="mx-4 bg-dark-card border border-dark-border rounded-xl overflow-hidden">
+        <SettingsRow
+          icon="chatbubble-ellipses-outline"
+          iconColor="#3B82F6"
+          label="Support"
+          onPress={() => router.push("/support")}
+          rightElement={
+            supportUnread > 0 ? (
+              <View style={{ flexDirection: "row", alignItems: "center" }}>
+                <View
+                  style={{
+                    backgroundColor: "#EF4444",
+                    borderRadius: 10,
+                    minWidth: 20,
+                    height: 20,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    paddingHorizontal: 6,
+                    marginRight: 8,
+                  }}
+                >
+                  <TextSemibold style={{ fontSize: 11, color: "#FFFFFF" }}>
+                    {supportUnread > 99 ? "99+" : supportUnread}
+                  </TextSemibold>
+                </View>
+                <Ionicons name="chevron-forward" size={16} color="#4B5563" />
+              </View>
+            ) : undefined
+          }
+        />
+
+        <View className="border-b border-dark-border mx-4" />
+
         <SettingsRow
           icon="information-circle-outline"
           iconColor="#6B7280"

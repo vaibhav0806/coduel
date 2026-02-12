@@ -33,6 +33,22 @@ import { preloadSounds, playSound } from "@/lib/audio";
 import { getStreakMilestone } from "@/lib/streak";
 import { MilestoneToastQueue } from "@/components/MilestoneToast";
 import type { Milestone } from "@/components/MilestoneToast";
+import { isAnswerCorrect } from "@/lib/answerValidation";
+import {
+  MCQOptions,
+  TrueFalseOptions,
+  SpotBugOptions,
+  MultiSelectOptions,
+  ReorderOptions,
+  FillBlankOptions,
+} from "@/components/question-types";
+import type { Answer } from "@/types/database";
+
+// Fix literal \n and \t stored in DB (standard SQL strings don't interpret escape sequences)
+function fixEscapes(text: string | null | undefined): string {
+  if (!text) return "";
+  return text.replace(/\\n/g, "\n").replace(/\\t/g, "\t");
+}
 
 // Animated number counter that counts from `from` to `to`
 function useCountAnimation(from: number, to: number, delay: number = 0, duration: number = 800) {
@@ -101,7 +117,7 @@ export default function BattleScreen() {
     if (battle.phase === "question") {
       cancelAnimation(timerWidth);
       timerWidth.value = 100;
-      timerWidth.value = withTiming(0, { duration: 15000 });
+      timerWidth.value = withTiming(0, { duration: battle.timeLimit * 1000 });
     } else {
       // Stop animation on any other phase
       cancelAnimation(timerWidth);
@@ -156,7 +172,11 @@ export default function BattleScreen() {
   // Haptics + shake on round result
   useEffect(() => {
     if (battle.phase !== "result" || !battle.roundResult) return;
-    const playerCorrect = battle.selectedAnswer === battle.roundResult.correct_answer;
+    const playerCorrect = isAnswerCorrect(
+      battle.roundResult.question_type,
+      battle.selectedAnswer,
+      battle.roundResult.correct_answer
+    );
     if (playerCorrect) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       playSound("correct");
@@ -634,90 +654,34 @@ export default function BattleScreen() {
         {/* Code Snippet */}
         {battle.question && (
           <>
-            <View className="bg-dark-card rounded-xl p-4 border border-dark-border mb-6">
-              <Text className="text-gray-400 text-xs mb-2 font-mono">
-                {battle.question.language ?? "Python"}
-              </Text>
-              <Text className="text-white font-mono text-base leading-6">
-                {battle.question.code_snippet}
-              </Text>
-            </View>
+            {/* Code Snippet — shown for types that use it (not spot_the_bug which has code in options, not fill_blank which renders inline) */}
+            {battle.question.code_snippet &&
+              (battle.question.question_type ?? "mcq") !== "fill_blank" && (
+                <View className="bg-dark-card rounded-xl p-4 border border-dark-border mb-6">
+                  <Text className="text-gray-400 text-xs mb-2 font-mono">
+                    {battle.question.language ?? "Python"}
+                  </Text>
+                  <Text className="text-white font-mono text-base leading-6">
+                    {fixEscapes(battle.question.code_snippet)}
+                  </Text>
+                </View>
+              )}
 
             {/* Question Text */}
             <Text className="text-white text-xl font-semibold mb-4">
-              {battle.question.question_text}
+              {fixEscapes(battle.question.question_text)}
             </Text>
 
-            {/* Options */}
-            <View className="space-y-3">
-              {battle.question.options.map((option, index) => {
-                const isSelected = battle.selectedAnswer === index;
-                const isCorrect =
-                  correctAnswer !== null && index === correctAnswer;
-                const isWrongSelected =
-                  showResult && isSelected && !isCorrect;
-
-                let bgClass = "bg-dark-card border-dark-border";
-                if (showResult) {
-                  if (isCorrect) {
-                    bgClass = "bg-win/20 border-win";
-                  } else if (isWrongSelected) {
-                    bgClass = "bg-lose/20 border-lose";
-                  }
-                } else if (isSelected) {
-                  bgClass = "bg-primary/20 border-primary";
-                }
-
-                const optionContent = (
-                  <Pressable
-                    onPress={() => battle.submitAnswer(index)}
-                    disabled={battle.selectedAnswer !== null || showResult}
-                    className={`p-4 rounded-xl border ${bgClass} mb-3`}
-                  >
-                    <View className="flex-row items-center">
-                      <View
-                        className={`w-8 h-8 rounded-full items-center justify-center mr-3 ${
-                          showResult && isCorrect
-                            ? "bg-win"
-                            : isWrongSelected
-                            ? "bg-lose"
-                            : "bg-dark-border"
-                        }`}
-                      >
-                        <Text className="text-white font-bold">
-                          {String.fromCharCode(65 + index)}
-                        </Text>
-                      </View>
-                      <Text className="text-white flex-1 font-mono">
-                        {option}
-                      </Text>
-                      {showResult && isCorrect && (
-                        <Ionicons
-                          name="checkmark-circle"
-                          size={24}
-                          color="#10B981"
-                        />
-                      )}
-                      {isWrongSelected && (
-                        <Ionicons
-                          name="close-circle"
-                          size={24}
-                          color="#EF4444"
-                        />
-                      )}
-                    </View>
-                  </Pressable>
-                );
-
-                return isWrongSelected ? (
-                  <Animated.View key={index} style={shakeStyle}>
-                    {optionContent}
-                  </Animated.View>
-                ) : (
-                  <View key={index}>{optionContent}</View>
-                );
-              })}
-            </View>
+            {/* Question Type Renderer */}
+            <QuestionRenderer
+              question={battle.question as any}
+              selectedAnswer={battle.selectedAnswer}
+              showResult={showResult}
+              correctAnswer={correctAnswer}
+              onSubmit={battle.submitAnswer}
+              disabled={battle.selectedAnswer !== null || showResult}
+              shakeStyle={shakeStyle}
+            />
           </>
         )}
 
@@ -743,7 +707,7 @@ export default function BattleScreen() {
               <>
                 <TextSemibold className="text-gray-500 text-xs uppercase mb-1">Explanation</TextSemibold>
                 <Text className="text-gray-400 leading-5 text-sm">
-                  {battle.question.explanation}
+                  {fixEscapes(battle.question.explanation)}
                 </Text>
               </>
             ) : null}
@@ -758,8 +722,40 @@ export default function BattleScreen() {
           >
             <TextSemibold className="text-secondary mb-2">Explanation</TextSemibold>
             <Text className="text-gray-300 leading-5">
-              {battle.roundResult.explanation}
+              {fixEscapes(battle.roundResult.explanation)}
             </Text>
+          </Animated.View>
+        )}
+
+        {/* Report question button */}
+        {showResult && battle.question && (
+          <Animated.View entering={FadeIn.delay(200).duration(300)}>
+            <Pressable
+              onPress={() => {
+                const snippet = battle.question?.code_snippet
+                  ? fixEscapes(battle.question.code_snippet).slice(0, 200)
+                  : "";
+                router.push({
+                  pathname: "/support",
+                  params: {
+                    questionId: battle.question!.id,
+                    questionType: battle.question!.question_type ?? "mcq",
+                    language: battle.question!.language ?? "Unknown",
+                    codeSnippet: snippet,
+                    questionText: fixEscapes(battle.question!.question_text),
+                    roundNumber: String(battle.currentRound),
+                    totalRounds: String(battle.totalRounds),
+                  },
+                });
+              }}
+              className="flex-row items-center justify-center mt-3 py-2"
+              hitSlop={8}
+            >
+              <Ionicons name="flag-outline" size={14} color="#6B7280" />
+              <Text style={{ fontSize: 13, color: "#6B7280", marginLeft: 6 }}>
+                Report Question
+              </Text>
+            </Pressable>
           </Animated.View>
         )}
 
@@ -778,6 +774,38 @@ export default function BattleScreen() {
 
     </SafeAreaView>
   );
+}
+
+function QuestionRenderer({
+  question,
+  shakeStyle,
+  ...props
+}: {
+  question: { question_type?: string; [key: string]: any };
+  selectedAnswer: Answer | null;
+  showResult: boolean;
+  correctAnswer: Answer | null;
+  onSubmit: (answer: Answer) => void;
+  disabled: boolean;
+  shakeStyle?: any;
+}) {
+  const questionType = question.question_type ?? "mcq";
+  const commonProps = { question: question as any, ...props };
+
+  switch (questionType) {
+    case "true_false":
+      return <TrueFalseOptions {...commonProps} />;
+    case "spot_the_bug":
+      return <SpotBugOptions {...commonProps} />;
+    case "multi_select":
+      return <MultiSelectOptions {...commonProps} />;
+    case "reorder":
+      return <ReorderOptions {...commonProps} />;
+    case "fill_blank":
+      return <FillBlankOptions {...commonProps} />;
+    default:
+      return <MCQOptions {...commonProps} shakeStyle={shakeStyle} />;
+  }
 }
 
 function ForfeitModal({

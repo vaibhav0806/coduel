@@ -154,6 +154,19 @@ function RootLayoutNav() {
                 },
               }}
             />
+            <Stack.Screen
+              name="support"
+              options={{
+                title: "Support",
+                animation: "slide_from_right",
+                headerStyle: { backgroundColor: "#050508" },
+                headerTintColor: "#FFFFFF",
+                headerTitleStyle: {
+                  fontFamily: "Outfit_600SemiBold",
+                  fontSize: 17,
+                },
+              }}
+            />
           </Stack>
         </AuthGuard>
       </AuthProvider>

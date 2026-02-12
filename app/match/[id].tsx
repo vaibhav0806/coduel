@@ -7,22 +7,30 @@ import Animated, { FadeIn, FadeInDown } from "react-native-reanimated";
 import { useEffect, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
-import { Match, MatchRound, Question } from "@/types/database";
+import { Match, MatchRound, Question, Answer, QuestionType } from "@/types/database";
 import { Skeleton, useSkeletonAnimation } from "@/components/ui/Skeleton";
+import { isAnswerCorrect } from "@/lib/answerValidation";
+
+function fixEscapes(text: string | null | undefined): string {
+  if (!text) return "";
+  return text.replace(/\\n/g, "\n").replace(/\\t/g, "\t");
+}
 
 interface MatchDetailRound {
   roundNumber: number;
+  questionId: string | null;
   question: {
     language: string;
+    question_type: QuestionType;
     code_snippet: string;
     question_text: string;
     options: string[];
-    correct_answer: number;
+    correct_answer: Answer;
     explanation: string;
   } | null;
-  playerAnswer: number | null;
+  playerAnswer: Answer | null;
   playerTimeMs: number | null;
-  opponentAnswer: number | null;
+  opponentAnswer: Answer | null;
   opponentTimeMs: number | null;
   roundWinnerId: string | null;
 }
@@ -30,6 +38,7 @@ interface MatchDetailRound {
 interface MatchDetail {
   match: Match;
   rounds: MatchDetailRound[];
+  playerName: string;
   opponentName: string;
   opponentRating: number | null;
   opponentId: string | null;
@@ -82,9 +91,9 @@ function ReviewSkeleton() {
 }
 
 export default function MatchReviewScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, viewAs } = useLocalSearchParams<{ id: string; viewAs?: string }>();
   const { user } = useAuth();
-  const userId = user?.id ?? "";
+  const userId = viewAs || user?.id || "";
   const [detail, setDetail] = useState<MatchDetail | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -114,9 +123,22 @@ export default function MatchReviewScreen() {
       const isP1 = match.player1_id === userId;
       const opponentId = isP1 ? match.player2_id : match.player1_id;
 
-      // Fetch opponent profile
+      // Fetch player + opponent profiles
+      let playerName = "You";
       let opponentName = "Bot";
       let opponentRating: number | null = null;
+
+      // If viewing someone else's match, fetch the player name
+      const isOwnMatch = userId === user?.id;
+      if (!isOwnMatch) {
+        const { data: playerProfile } = await supabase
+          .from("profiles")
+          .select("username")
+          .eq("id", userId)
+          .single();
+        if (playerProfile) playerName = playerProfile.username;
+      }
+
       if (!match.is_bot_match && opponentId) {
         const { data: opponent } = await supabase
           .from("profiles")
@@ -133,9 +155,11 @@ export default function MatchReviewScreen() {
         const question = r.questions;
         return {
           roundNumber: r.round_number,
+          questionId: r.question_id ?? null,
           question: question
             ? {
                 language: question.language,
+                question_type: question.question_type ?? "mcq",
                 code_snippet: question.code_snippet,
                 question_text: question.question_text,
                 options: question.options,
@@ -154,6 +178,7 @@ export default function MatchReviewScreen() {
       setDetail({
         match,
         rounds: detailRounds,
+        playerName,
         opponentName,
         opponentRating,
         opponentId: match.is_bot_match ? null : (opponentId ?? null),
@@ -161,7 +186,8 @@ export default function MatchReviewScreen() {
         opponentScore: isP1 ? match.player2_score : match.player1_score,
         ratingChange: isP1 ? match.player1_rating_change : match.player2_rating_change,
         result: match.winner_id === userId ? "win"
-          : match.winner_id === null && match.ended_at && !match.forfeited_by ? "draw"
+          : (isP1 ? match.player1_score : match.player2_score) ===
+            (isP1 ? match.player2_score : match.player1_score) ? "draw"
           : "loss",
         isBotMatch: match.is_bot_match,
         forfeitedBy: match.forfeited_by,
@@ -200,7 +226,7 @@ export default function MatchReviewScreen() {
     );
   }
 
-  const { match, rounds, opponentName, opponentRating, opponentId, playerScore, opponentScore, ratingChange, result, isBotMatch, forfeitedBy } = detail;
+  const { match, rounds, playerName, opponentName, opponentRating, opponentId, playerScore, opponentScore, ratingChange, result, isBotMatch, forfeitedBy } = detail;
   const totalRounds = rounds.length;
   const won = result === "win";
   const isForfeit = !!forfeitedBy;
@@ -359,10 +385,14 @@ export default function MatchReviewScreen() {
 
         {/* Round Cards */}
         {rounds.map((round, index) => {
-          const playerWonRound = round.roundWinnerId === userId;
           const playerCorrect =
             round.question != null &&
-            round.playerAnswer === round.question.correct_answer;
+            isAnswerCorrect(
+              round.question.question_type,
+              round.playerAnswer,
+              round.question.correct_answer
+            );
+          const questionType = round.question?.question_type ?? "mcq";
 
           return (
             <Animated.View
@@ -376,84 +406,79 @@ export default function MatchReviewScreen() {
                   <TextSemibold className="text-gray-400" style={{ fontSize: 13 }}>
                     Round {round.roundNumber} of {totalRounds}
                   </TextSemibold>
-                  {round.question != null && (
-                    <Ionicons
-                      name={playerCorrect ? "checkmark-circle" : "close-circle"}
-                      size={20}
-                      color={playerCorrect ? "#10B981" : "#EF4444"}
-                    />
-                  )}
+                  <View className="flex-row items-center" style={{ gap: 6 }}>
+                    {round.question != null && (
+                      <>
+                        <Text className="text-gray-600" style={{ fontSize: 10 }}>
+                          {questionType.replace("_", " ").toUpperCase()}
+                        </Text>
+                        <Ionicons
+                          name={playerCorrect ? "checkmark-circle" : "close-circle"}
+                          size={20}
+                          color={playerCorrect ? "#10B981" : "#EF4444"}
+                        />
+                        <Pressable
+                          onPress={() => {
+                            const snippet = round.question?.code_snippet
+                              ? fixEscapes(round.question.code_snippet).slice(0, 200)
+                              : "";
+                            router.push({
+                              pathname: "/support",
+                              params: {
+                                questionId: round.questionId ?? "unknown",
+                                questionType: round.question!.question_type ?? "mcq",
+                                language: round.question!.language ?? "Unknown",
+                                codeSnippet: snippet,
+                                questionText: fixEscapes(round.question!.question_text),
+                                roundNumber: String(round.roundNumber),
+                                totalRounds: String(totalRounds),
+                              },
+                            });
+                          }}
+                          hitSlop={10}
+                          style={{ marginLeft: 2 }}
+                        >
+                          <Ionicons name="flag-outline" size={16} color="#6B7280" />
+                        </Pressable>
+                      </>
+                    )}
+                  </View>
                 </View>
 
                 {round.question ? (
                   <View className="px-4 pb-4">
-                    {/* Code snippet */}
-                    <View className="bg-dark rounded-xl p-4 border border-dark-border mb-3">
-                      <Text className="text-gray-400 text-xs mb-2 font-mono">
-                        {round.question.language}
-                      </Text>
-                      <Text className="text-white font-mono text-base leading-6">
-                        {round.question.code_snippet}
-                      </Text>
-                    </View>
+                    {/* Code snippet — shown for most types */}
+                    {round.question.code_snippet && questionType !== "fill_blank" && (
+                      <View className="bg-dark rounded-xl p-4 border border-dark-border mb-3">
+                        <Text className="text-gray-400 text-xs mb-2 font-mono">
+                          {round.question.language}
+                        </Text>
+                        <Text className="text-white font-mono text-base leading-6">
+                          {fixEscapes(round.question.code_snippet)}
+                        </Text>
+                      </View>
+                    )}
 
                     {/* Question text */}
                     <TextSemibold className="text-white mb-3" style={{ fontSize: 15 }}>
-                      {round.question.question_text}
+                      {fixEscapes(round.question.question_text)}
                     </TextSemibold>
 
-                    {/* Options */}
-                    {round.question.options.map((option, optIdx) => {
-                      const isCorrect = optIdx === round.question!.correct_answer;
-                      const isPlayerAnswer = optIdx === round.playerAnswer;
-                      const isWrongSelected = isPlayerAnswer && !isCorrect;
-
-                      let bgClass = "bg-dark border-dark-border";
-                      if (isCorrect) {
-                        bgClass = "bg-win/20 border-win";
-                      } else if (isWrongSelected) {
-                        bgClass = "bg-lose/20 border-lose";
-                      }
-
-                      return (
-                        <View
-                          key={optIdx}
-                          className={`p-3 rounded-xl border ${bgClass} mb-2`}
-                        >
-                          <View className="flex-row items-center">
-                            <View
-                              className={`w-7 h-7 rounded-full items-center justify-center mr-3 ${
-                                isCorrect
-                                  ? "bg-win"
-                                  : isWrongSelected
-                                  ? "bg-lose"
-                                  : "bg-dark-border"
-                              }`}
-                            >
-                              <Text className="text-white font-bold" style={{ fontSize: 12 }}>
-                                {String.fromCharCode(65 + optIdx)}
-                              </Text>
-                            </View>
-                            <Text className="text-white flex-1 font-mono" style={{ fontSize: 14 }}>
-                              {option}
-                            </Text>
-                            {isCorrect && (
-                              <Ionicons name="checkmark-circle" size={20} color="#10B981" />
-                            )}
-                            {isWrongSelected && (
-                              <Ionicons name="close-circle" size={20} color="#EF4444" />
-                            )}
-                          </View>
-                        </View>
-                      );
-                    })}
+                    {/* Type-specific review */}
+                    <ReviewOptions
+                      questionType={questionType}
+                      options={round.question.options}
+                      correctAnswer={round.question.correct_answer}
+                      playerAnswer={round.playerAnswer}
+                      codeSnippet={round.question.code_snippet}
+                    />
 
                     {/* Response times */}
                     <View className="flex-row items-center mt-2" style={{ gap: 16 }}>
                       {round.playerTimeMs != null && (
                         <View className="flex-row items-center">
                           <Text className="text-gray-500" style={{ fontSize: 11 }}>
-                            You:{" "}
+                            {playerName}:{" "}
                           </Text>
                           <TextMedium className="text-gray-400" style={{ fontSize: 11 }}>
                             {(round.playerTimeMs / 1000).toFixed(1)}s
@@ -478,7 +503,7 @@ export default function MatchReviewScreen() {
                         Explanation
                       </TextSemibold>
                       <Text className="text-gray-300 leading-5" style={{ fontSize: 13 }}>
-                        {round.question.explanation}
+                        {fixEscapes(round.question.explanation)}
                       </Text>
                     </View>
                   </View>
@@ -496,4 +521,183 @@ export default function MatchReviewScreen() {
       </ScrollView>
     </SafeAreaView>
   );
+}
+
+function ReviewOptions({
+  questionType,
+  options,
+  correctAnswer,
+  playerAnswer,
+  codeSnippet,
+}: {
+  questionType: QuestionType;
+  options: string[];
+  correctAnswer: Answer;
+  playerAnswer: Answer | null;
+  codeSnippet: string;
+}) {
+  switch (questionType) {
+    case "multi_select": {
+      const correctSet = new Set(Array.isArray(correctAnswer) ? correctAnswer : []);
+      const playerSet = new Set(Array.isArray(playerAnswer) ? playerAnswer : []);
+      return (
+        <>
+          {options.map((option, optIdx) => {
+            const isCorrect = correctSet.has(optIdx);
+            const isPlayerPick = playerSet.has(optIdx);
+            const isWrongSelected = isPlayerPick && !isCorrect;
+            const isMissed = isCorrect && !isPlayerPick;
+
+            let bgClass = "bg-dark border-dark-border";
+            if (isCorrect && isPlayerPick) bgClass = "bg-win/20 border-win";
+            else if (isWrongSelected) bgClass = "bg-lose/20 border-lose";
+            else if (isMissed) bgClass = "bg-win/10 border-win/50";
+
+            return (
+              <View key={optIdx} className={`p-3 rounded-xl border ${bgClass} mb-2`}>
+                <View className="flex-row items-center">
+                  <View
+                    className={`w-7 h-7 rounded-md items-center justify-center mr-3 border ${
+                      isPlayerPick
+                        ? isWrongSelected
+                          ? "bg-lose border-lose"
+                          : "bg-win border-win"
+                        : "bg-dark-border border-dark-border"
+                    }`}
+                  >
+                    {isPlayerPick && (
+                      <Ionicons name="checkmark" size={14} color="#FFFFFF" />
+                    )}
+                  </View>
+                  <Text className="text-white flex-1 font-mono" style={{ fontSize: 14 }}>
+                    {option}
+                  </Text>
+                  {isCorrect && <Ionicons name="checkmark-circle" size={20} color="#10B981" />}
+                  {isWrongSelected && <Ionicons name="close-circle" size={20} color="#EF4444" />}
+                </View>
+              </View>
+            );
+          })}
+        </>
+      );
+    }
+
+    case "reorder": {
+      const correctArr = Array.isArray(correctAnswer) ? correctAnswer : [];
+      const playerArr = Array.isArray(playerAnswer) ? playerAnswer : [];
+      return (
+        <View>
+          <TextSemibold className="text-gray-500 mb-2" style={{ fontSize: 12 }}>
+            Your order vs Correct order
+          </TextSemibold>
+          {correctArr.map((correctIdx, pos) => {
+            const playerIdx = playerArr[pos];
+            const isCorrectPos = playerIdx === correctIdx;
+            return (
+              <View
+                key={pos}
+                className={`p-3 rounded-xl border mb-2 ${
+                  isCorrectPos ? "bg-win/20 border-win" : "bg-lose/20 border-lose"
+                }`}
+              >
+                <View className="flex-row items-center">
+                  <View className="w-7 h-7 rounded-full bg-dark-border items-center justify-center mr-3">
+                    <Text className="text-gray-400 font-bold" style={{ fontSize: 12 }}>
+                      {pos + 1}
+                    </Text>
+                  </View>
+                  <View className="flex-1">
+                    {playerIdx !== undefined && playerIdx !== correctIdx && (
+                      <Text className="text-lose font-mono line-through" style={{ fontSize: 12 }}>
+                        {options[playerIdx]}
+                      </Text>
+                    )}
+                    <Text className="text-white font-mono" style={{ fontSize: 14 }}>
+                      {options[correctIdx]}
+                    </Text>
+                  </View>
+                  <Ionicons
+                    name={isCorrectPos ? "checkmark-circle" : "close-circle"}
+                    size={20}
+                    color={isCorrectPos ? "#10B981" : "#EF4444"}
+                  />
+                </View>
+              </View>
+            );
+          })}
+        </View>
+      );
+    }
+
+    case "fill_blank": {
+      const correctArr = Array.isArray(correctAnswer) ? correctAnswer : [];
+      const playerArr = Array.isArray(playerAnswer) ? playerAnswer : [];
+      return (
+        <View>
+          {/* Show correct fills */}
+          <View className="bg-dark rounded-xl p-3 border border-secondary/30 mb-2">
+            <Text className="text-secondary text-xs mb-1 font-bold">Correct fills:</Text>
+            {correctArr.map((idx, i) => {
+              const pIdx = playerArr[i];
+              const isCorrectFill = pIdx === idx;
+              return (
+                <View key={i} className="flex-row items-center mb-1">
+                  <Ionicons
+                    name={isCorrectFill ? "checkmark-circle" : "close-circle"}
+                    size={14}
+                    color={isCorrectFill ? "#10B981" : "#EF4444"}
+                    style={{ marginRight: 4 }}
+                  />
+                  <Text className="text-gray-300 font-mono" style={{ fontSize: 12 }}>
+                    Blank {i + 1}: {options[idx]}
+                    {!isCorrectFill && pIdx !== undefined
+                      ? ` (you: ${options[pIdx]})`
+                      : ""}
+                  </Text>
+                </View>
+              );
+            })}
+          </View>
+        </View>
+      );
+    }
+
+    // MCQ, true_false, spot_the_bug — standard option list
+    default: {
+      return (
+        <>
+          {options.map((option, optIdx) => {
+            const isCorrect = optIdx === correctAnswer;
+            const isPlayerAnswer = optIdx === playerAnswer;
+            const isWrongSelected = isPlayerAnswer && !isCorrect;
+
+            let bgClass = "bg-dark border-dark-border";
+            if (isCorrect) bgClass = "bg-win/20 border-win";
+            else if (isWrongSelected) bgClass = "bg-lose/20 border-lose";
+
+            return (
+              <View key={optIdx} className={`p-3 rounded-xl border ${bgClass} mb-2`}>
+                <View className="flex-row items-center">
+                  <View
+                    className={`w-7 h-7 rounded-full items-center justify-center mr-3 ${
+                      isCorrect ? "bg-win" : isWrongSelected ? "bg-lose" : "bg-dark-border"
+                    }`}
+                  >
+                    <Text className="text-white font-bold" style={{ fontSize: 12 }}>
+                      {questionType === "spot_the_bug" ? `${optIdx + 1}` : String.fromCharCode(65 + optIdx)}
+                    </Text>
+                  </View>
+                  <Text className="text-white flex-1 font-mono" style={{ fontSize: 14 }}>
+                    {option}
+                  </Text>
+                  {isCorrect && <Ionicons name="checkmark-circle" size={20} color="#10B981" />}
+                  {isWrongSelected && <Ionicons name="close-circle" size={20} color="#EF4444" />}
+                </View>
+              </View>
+            );
+          })}
+        </>
+      );
+    }
+  }
 }

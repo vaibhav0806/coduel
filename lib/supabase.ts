@@ -1,7 +1,7 @@
 import "react-native-url-polyfill/auto";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { createClient } from "@supabase/supabase-js";
-import { Database } from "@/types/database";
+import { Database, Answer } from "@/types/database";
 import { generateBotName, generateBotRating } from "@/lib/bot";
 import { getDifficultyForRating, calculateRatingChange, applyFloorProtection, getTierForRating } from "@/lib/rating";
 import { calculateStreakUpdate } from "@/lib/streak";
@@ -66,7 +66,7 @@ async function selectQuestions(
   function buildQuery(minD: number, maxD: number, excludeIds: string[], limit: number) {
     let q = supabase
       .from("questions")
-      .select("id")
+      .select("id, question_type")
       .gte("difficulty", minD)
       .lte("difficulty", maxD)
       .limit(limit);
@@ -78,36 +78,86 @@ async function selectQuestions(
     return q;
   }
 
-  // Step 1: Prioritize exact difficulty match (unseen)
-  let { data: questions } = await buildQuery(difficulty, difficulty, seenIds, 20);
-  let pool = questions ?? [];
+  // --- Phase 1: Fetch non-MCQ questions separately (target: 3) ---
+  // This guarantees type diversity — querying separately avoids MCQs
+  // dominating the pool due to insertion-order bias.
+  let nonMcqPool: { id: string; question_type: string }[] = [];
 
-  // Step 2: If not enough, expand to ±1 difficulty (unseen)
-  if (pool.length < 3) {
-    const have = pool.map((q) => q.id);
-    const minDiff = Math.max(1, difficulty - 1);
-    const maxDiff = Math.min(4, difficulty + 1);
-    const { data: extra } = await buildQuery(minDiff, maxDiff, [...seenIds, ...have], 20 - have.length);
-    pool = [...pool, ...(extra ?? [])];
+  // Exact difficulty, unseen, non-MCQ
+  {
+    const { data } = await buildQuery(difficulty, difficulty, seenIds, 10)
+      .neq("question_type", "mcq");
+    nonMcqPool = data ?? [];
   }
 
-  // Step 3: If still not enough, allow seen questions at exact difficulty
-  if (pool.length < 3) {
-    const have = pool.map((q) => q.id);
-    const { data: extra } = await buildQuery(difficulty, difficulty, have, 20 - have.length);
-    pool = [...pool, ...(extra ?? [])];
+  // Expand to ±1 difficulty if needed
+  if (nonMcqPool.length < 3) {
+    const have = nonMcqPool.map((q) => q.id);
+    const { data } = await buildQuery(
+      Math.max(1, difficulty - 1), Math.min(4, difficulty + 1),
+      [...seenIds, ...have], 10
+    ).neq("question_type", "mcq");
+    nonMcqPool = [...nonMcqPool, ...(data ?? [])];
   }
 
-  // Step 4: Last resort — any questions
-  if (pool.length < 3) {
-    const have = pool.map((q) => q.id);
-    let q = supabase.from("questions").select("id").limit(20);
+  // Allow seen non-MCQ if still not enough
+  if (nonMcqPool.length < 3) {
+    const have = nonMcqPool.map((q) => q.id);
+    const { data } = await buildQuery(1, 4, have, 10)
+      .neq("question_type", "mcq");
+    nonMcqPool = [...nonMcqPool, ...(data ?? [])];
+  }
+
+  const nonMcqPicks = shuffleAndPick(nonMcqPool, Math.min(3, nonMcqPool.length));
+  console.log("[Questions] Non-MCQ picks:", nonMcqPicks.length, "from pool of", nonMcqPool.length);
+
+  // --- Phase 2: Fetch remaining questions for other slots ---
+  const remainingNeeded = 5 - nonMcqPicks.length;
+  const excludeFromRest = [...seenIds, ...nonMcqPicks.map((q) => q.id)];
+
+  let restPool: { id: string; question_type: string }[] = [];
+
+  // Exact difficulty, unseen
+  {
+    const { data } = await buildQuery(difficulty, difficulty, excludeFromRest, 20);
+    restPool = data ?? [];
+  }
+
+  // Expand to ±1 if needed
+  if (restPool.length < remainingNeeded) {
+    const have = restPool.map((q) => q.id);
+    const { data } = await buildQuery(
+      Math.max(1, difficulty - 1), Math.min(4, difficulty + 1),
+      [...excludeFromRest, ...have], 20
+    );
+    restPool = [...restPool, ...(data ?? [])];
+  }
+
+  // Allow seen if still not enough
+  if (restPool.length < remainingNeeded) {
+    const have = restPool.map((q) => q.id);
+    const { data } = await buildQuery(difficulty, difficulty,
+      [...nonMcqPicks.map((q) => q.id), ...have], 20
+    );
+    restPool = [...restPool, ...(data ?? [])];
+  }
+
+  const restPicks = shuffleAndPick(restPool, remainingNeeded);
+
+  // Combine and shuffle
+  let final = shuffleAndPick([...nonMcqPicks, ...restPicks], 5);
+
+  // Last resort fallback
+  if (final.length < 5) {
+    const have = final.map((q) => q.id);
+    let q = supabase.from("questions").select("id, question_type").limit(20);
     if (have.length > 0) q = q.not("id", "in", `(${have.join(",")})`);
-    const { data: any20 } = await q;
-    pool = [...pool, ...(any20 ?? [])];
+    const { data } = await q;
+    final = [...final, ...shuffleAndPick(data ?? [], 5 - final.length)];
   }
 
-  return shuffleAndPick(pool, 5);
+  console.log("[Questions] Final selection:", JSON.stringify(final.map(q => q.question_type)));
+  return final;
 }
 
 export async function createBotMatch(
@@ -560,6 +610,7 @@ export async function startBattle(matchId: string, userId: string) {
       round_id: r.id,
       question: {
         id: q.id,
+        question_type: q.question_type ?? "mcq",
         code_snippet: q.code_snippet,
         question_text: q.question_text,
         options: q.options,
@@ -588,7 +639,7 @@ export async function submitBattleAnswer(
   matchId: string,
   userId: string,
   roundNumber: number,
-  answer: number,
+  answer: Answer,
   clientTimeMs: number
 ) {
   // Record answer in DB
@@ -636,7 +687,7 @@ export async function submitBattleAnswer(
 export async function fetchRoundResult(matchId: string, roundNumber: number) {
   const { data, error } = await supabase
     .from("match_rounds")
-    .select("*, questions(correct_answer, explanation)")
+    .select("*, questions(correct_answer, explanation, question_type)")
     .eq("match_id", matchId)
     .eq("round_number", roundNumber)
     .single();

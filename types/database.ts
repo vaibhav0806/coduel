@@ -6,6 +6,9 @@ export type Json =
   | { [key: string]: Json | undefined }
   | Json[];
 
+export type QuestionType = 'mcq' | 'true_false' | 'spot_the_bug' | 'multi_select' | 'reorder' | 'fill_blank';
+export type Answer = number | number[];
+
 export interface Database {
   public: {
     Tables: {
@@ -77,10 +80,11 @@ export interface Database {
           category: string | null;
           topic: string | null;
           internal_topic: string | null;
+          question_type: string;
           code_snippet: string;
           question_text: string;
           options: string[];
-          correct_answer: number;
+          correct_answer: Answer;
           explanation: string;
           created_at: string;
         };
@@ -91,10 +95,11 @@ export interface Database {
           category?: string | null;
           topic?: string | null;
           internal_topic?: string | null;
+          question_type?: string;
           code_snippet: string;
           question_text?: string;
           options: string[];
-          correct_answer: number;
+          correct_answer: Answer;
           explanation: string;
           created_at?: string;
         };
@@ -105,10 +110,11 @@ export interface Database {
           category?: string | null;
           topic?: string | null;
           internal_topic?: string | null;
+          question_type?: string;
           code_snippet?: string;
           question_text?: string;
           options?: string[];
-          correct_answer?: number;
+          correct_answer?: Answer;
           explanation?: string;
           created_at?: string;
         };
@@ -183,9 +189,9 @@ export interface Database {
           match_id: string;
           round_number: number;
           question_id: string;
-          player1_answer: number | null;
+          player1_answer: Answer | null;
           player1_time_ms: number | null;
-          player2_answer: number | null;
+          player2_answer: Answer | null;
           player2_time_ms: number | null;
           round_winner_id: string | null;
           round_started_at: string | null;
@@ -195,9 +201,9 @@ export interface Database {
           match_id: string;
           round_number: number;
           question_id: string;
-          player1_answer?: number | null;
+          player1_answer?: Answer | null;
           player1_time_ms?: number | null;
-          player2_answer?: number | null;
+          player2_answer?: Answer | null;
           player2_time_ms?: number | null;
           round_winner_id?: string | null;
           round_started_at?: string | null;
@@ -207,9 +213,9 @@ export interface Database {
           match_id?: string;
           round_number?: number;
           question_id?: string;
-          player1_answer?: number | null;
+          player1_answer?: Answer | null;
           player1_time_ms?: number | null;
-          player2_answer?: number | null;
+          player2_answer?: Answer | null;
           player2_time_ms?: number | null;
           round_winner_id?: string | null;
           round_started_at?: string | null;
@@ -379,6 +385,76 @@ export interface Database {
           },
         ];
       };
+      support_conversations: {
+        Row: {
+          id: string;
+          user_id: string;
+          slack_thread_ts: string | null;
+          status: string;
+          unread_count: number;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          slack_thread_ts?: string | null;
+          status?: string;
+          unread_count?: number;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          slack_thread_ts?: string | null;
+          status?: string;
+          unread_count?: number;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "support_conversations_user_id_fkey";
+            columns: ["user_id"];
+            isOneToOne: true;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      support_messages: {
+        Row: {
+          id: string;
+          conversation_id: string;
+          sender: string;
+          body: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          conversation_id: string;
+          sender: string;
+          body: string;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          conversation_id?: string;
+          sender?: string;
+          body?: string;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "support_messages_conversation_id_fkey";
+            columns: ["conversation_id"];
+            isOneToOne: false;
+            referencedRelation: "support_conversations";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
     };
     Views: {};
     Functions: {};
@@ -395,6 +471,10 @@ export type MatchQueue = Database["public"]["Tables"]["match_queue"]["Row"];
 export type LeagueMembership =
   Database["public"]["Tables"]["league_memberships"]["Row"];
 export type Follow = Database["public"]["Tables"]["follows"]["Row"];
+export type SupportConversation =
+  Database["public"]["Tables"]["support_conversations"]["Row"];
+export type SupportMessage =
+  Database["public"]["Tables"]["support_messages"]["Row"];
 
 // Tier type
 export type Tier = "bronze" | "silver" | "gold" | "diamond";
@@ -404,10 +484,11 @@ export type BattleState = "waiting" | "ready" | "question" | "result" | "ended";
 
 export interface BattleQuestion {
   id: string;
+  question_type: QuestionType;
   code_snippet: string;
   question_text: string;
   options: string[];
-  correct_answer: number;
+  correct_answer: Answer;
   explanation: string;
   time_limit_ms: number;
 }

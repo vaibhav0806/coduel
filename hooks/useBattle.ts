@@ -17,6 +17,20 @@ import {
 import { RealtimeChannel } from "@supabase/supabase-js";
 import { calculateStreakUpdate } from "@/lib/streak";
 import { calculateMatchXP, getLevelFromXP } from "@/lib/xp";
+import { isAnswerCorrect } from "@/lib/answerValidation";
+import type { QuestionType, Answer } from "@/types/database";
+
+// Time limit per question type (seconds)
+export function getTimeLimitForType(questionType: QuestionType): number {
+  switch (questionType) {
+    case "multi_select":
+    case "reorder":
+    case "fill_blank":
+      return 25;
+    default:
+      return 15;
+  }
+}
 
 export type BattlePhase =
   | "loading"
@@ -34,21 +48,23 @@ interface BattlePlayer {
 
 interface BattleQuestion {
   id: string;
+  question_type: QuestionType;
   code_snippet: string;
   question_text: string;
   options: string[];
   language?: string;
-  correct_answer?: number;
+  correct_answer?: Answer;
   explanation?: string;
 }
 
 interface RoundResult {
   round_number: number;
-  correct_answer: number;
+  question_type: QuestionType;
+  correct_answer: Answer;
   explanation: string;
-  player_answer: number;
+  player_answer: Answer;
   player_time_ms: number;
-  opponent_answer: number;
+  opponent_answer: Answer;
   opponent_time_ms: number;
   round_winner: "player" | "opponent" | "tie";
   player_score: number;
@@ -79,12 +95,13 @@ interface UseBattleProps {
   isBotMatch?: boolean;
 }
 
-// Bot answer generation (inline to avoid import issues)
+// Bot answer generation (type-aware)
 function generateBotAnswer(
-  correctAnswer: number,
+  questionType: QuestionType,
+  correctAnswer: Answer,
   totalOptions: number,
   difficulty: number
-): { answer: number; timeMs: number } {
+): { answer: Answer; timeMs: number } {
   const accuracyMap: Record<number, number> = {
     1: 0.87,
     2: 0.82,
@@ -94,18 +111,83 @@ function generateBotAnswer(
   const accuracy = accuracyMap[difficulty] ?? 0.8;
   const isCorrect = Math.random() < accuracy;
 
-  let answer: number;
-  if (isCorrect) {
-    answer = correctAnswer;
-  } else {
-    do {
-      answer = Math.floor(Math.random() * totalOptions);
-    } while (answer === correctAnswer);
-  }
-
   const minTime = 2000 + difficulty * 1000;
   const maxTime = 5000 + difficulty * 2000;
   const timeMs = minTime + Math.floor(Math.random() * (maxTime - minTime));
+
+  if (isCorrect) {
+    return { answer: correctAnswer, timeMs };
+  }
+
+  // Generate a plausible wrong answer based on question type
+  let answer: Answer;
+  switch (questionType) {
+    case "mcq":
+    case "true_false":
+    case "spot_the_bug": {
+      const correct = correctAnswer as number;
+      let wrong: number;
+      do {
+        wrong = Math.floor(Math.random() * totalOptions);
+      } while (wrong === correct);
+      answer = wrong;
+      break;
+    }
+    case "multi_select": {
+      // Toggle 1-2 items from the correct set
+      const correct = correctAnswer as number[];
+      const result = [...correct];
+      const toggleCount = Math.random() < 0.5 ? 1 : 2;
+      for (let i = 0; i < toggleCount; i++) {
+        if (Math.random() < 0.5 && result.length > 1) {
+          // Remove a random correct item
+          result.splice(Math.floor(Math.random() * result.length), 1);
+        } else {
+          // Add a random wrong item
+          let wrong: number;
+          do {
+            wrong = Math.floor(Math.random() * totalOptions);
+          } while (result.includes(wrong));
+          result.push(wrong);
+        }
+      }
+      answer = result.sort((a, b) => a - b);
+      break;
+    }
+    case "reorder": {
+      // Swap 1-2 adjacent items
+      const correct = correctAnswer as number[];
+      const result = [...correct];
+      const swapCount = Math.random() < 0.5 ? 1 : 2;
+      for (let i = 0; i < swapCount; i++) {
+        const idx = Math.floor(Math.random() * (result.length - 1));
+        [result[idx], result[idx + 1]] = [result[idx + 1], result[idx]];
+      }
+      answer = result;
+      break;
+    }
+    case "fill_blank": {
+      // Change 1 blank to a random wrong token
+      const correct = correctAnswer as number[];
+      const result = [...correct];
+      const blankIdx = Math.floor(Math.random() * result.length);
+      let wrong: number;
+      do {
+        wrong = Math.floor(Math.random() * totalOptions);
+      } while (wrong === result[blankIdx]);
+      result[blankIdx] = wrong;
+      answer = result;
+      break;
+    }
+    default: {
+      const correct = correctAnswer as number;
+      let wrong: number;
+      do {
+        wrong = Math.floor(Math.random() * totalOptions);
+      } while (wrong === correct);
+      answer = wrong;
+    }
+  }
 
   return { answer, timeMs };
 }
@@ -113,17 +195,18 @@ function generateBotAnswer(
 // Pure function: compute round result from answers
 function computeRoundResult(
   roundNumber: number,
-  correctAnswer: number,
+  questionType: QuestionType,
+  correctAnswer: Answer,
   explanation: string,
-  playerAnswer: number,
+  playerAnswer: Answer,
   playerTimeMs: number,
-  opponentAnswer: number,
+  opponentAnswer: Answer,
   opponentTimeMs: number,
   currentPlayerScore: number,
   currentOpponentScore: number
 ): RoundResult {
-  const playerCorrect = playerAnswer === correctAnswer;
-  const opponentCorrect = opponentAnswer === correctAnswer;
+  const playerCorrect = isAnswerCorrect(questionType, playerAnswer, correctAnswer);
+  const opponentCorrect = isAnswerCorrect(questionType, opponentAnswer, correctAnswer);
 
   let winner: "player" | "opponent" | "tie" = "tie";
   if (playerCorrect && !opponentCorrect) winner = "player";
@@ -136,6 +219,7 @@ function computeRoundResult(
 
   return {
     round_number: roundNumber,
+    question_type: questionType,
     correct_answer: correctAnswer,
     explanation,
     player_answer: playerAnswer,
@@ -161,7 +245,7 @@ export function useBattle({
   const [player, setPlayer] = useState<BattlePlayer | null>(null);
   const [opponent, setOpponent] = useState<BattlePlayer | null>(null);
   const [timeRemaining, setTimeRemaining] = useState(15);
-  const [selectedAnswer, setSelectedAnswer] = useState<number | null>(null);
+  const [selectedAnswer, setSelectedAnswer] = useState<Answer | null>(null);
   const [opponentAnswered, setOpponentAnswered] = useState(false);
   const [roundWinner, setRoundWinner] = useState<string | null>(null);
   const [roundResult, setRoundResult] = useState<RoundResult | null>(null);
@@ -384,6 +468,7 @@ export function useBattle({
     try {
       const roundData = await fetchRoundResult(matchId, round);
       const q = roundData.questions as any;
+      const questionType: QuestionType = q.question_type ?? "mcq";
 
       // Map player1/player2 to player/opponent based on role
       const playerAnswer = isPlayer1Ref.current
@@ -401,12 +486,13 @@ export function useBattle({
 
       const result = computeRoundResult(
         round,
+        questionType,
         q.correct_answer,
         q.explanation ?? "",
         playerAnswer ?? -1,
-        playerTimeMs ?? 15000,
+        playerTimeMs ?? getTimeLimitForType(questionType) * 1000,
         opponentAnswer ?? -1,
-        opponentTimeMs ?? 15000,
+        opponentTimeMs ?? getTimeLimitForType(questionType) * 1000,
         playerScoreRef.current,
         opponentScoreRef.current
       );
@@ -535,7 +621,8 @@ export function useBattle({
 
     if (countdown <= 0) {
       setPhase("question");
-      setTimeRemaining(15);
+      const timeLimit = getTimeLimitForType(question?.question_type ?? "mcq");
+      setTimeRemaining(timeLimit);
       startTimeRef.current = Date.now();
       submittedRef.current = false;
       opponentAnsweredRef.current = false;
@@ -569,15 +656,17 @@ export function useBattle({
 
   // Process bot round result
   const processBotRound = useCallback(
-    (playerAnswer: number, playerTimeMs: number) => {
+    (playerAnswer: Answer, playerTimeMs: number) => {
       const q = questionsRef.current.find(
         (q) => q.round_number === currentRound
       );
       if (!q || q.question.correct_answer === undefined) return;
 
       const correctAnswer = q.question.correct_answer;
+      const questionType = q.question.question_type ?? "mcq" as QuestionType;
       const difficulty = 1; // TODO: get from question
       const botResult = generateBotAnswer(
+        questionType,
         correctAnswer,
         q.question.options.length,
         difficulty
@@ -587,6 +676,7 @@ export function useBattle({
       setTimeout(() => {
         const result = computeRoundResult(
           currentRound,
+          questionType,
           correctAnswer,
           q.question.explanation ?? "",
           playerAnswer,
@@ -634,25 +724,25 @@ export function useBattle({
   );
 
   const handleSubmitAnswer = useCallback(
-    async (answerIndex: number) => {
-      if (submittedRef.current && answerIndex !== -1) return;
-      if (phase !== "question" && answerIndex !== -1) return;
+    async (answer: Answer) => {
+      if (submittedRef.current && answer !== -1) return;
+      if (phase !== "question" && answer !== -1) return;
 
       submittedRef.current = true;
-      const isTimeout = answerIndex === -1;
+      const isTimeout = answer === -1;
       setTimedOut(isTimeout);
       timedOutRef.current = isTimeout;
       const answerTime = Date.now() - startTimeRef.current;
-      setSelectedAnswer(answerIndex);
+      setSelectedAnswer(answer);
       clearTimer();
 
       // Save to DB (includes broadcast for human matches)
-      submitBattleAnswer(matchId, userId, currentRound, answerIndex, answerTime).catch(
+      submitBattleAnswer(matchId, userId, currentRound, answer, answerTime).catch(
         (err) => console.warn("[Battle] Submit error:", err)
       );
 
       if (isBotRef.current) {
-        processBotRound(answerIndex, answerTime);
+        processBotRound(answer, answerTime);
       } else {
         // Human match: show waiting state
         if (!opponentAnsweredRef.current) {
@@ -787,6 +877,7 @@ export function useBattle({
     player,
     opponent,
     timeRemaining,
+    timeLimit: getTimeLimitForType(question?.question_type ?? "mcq"),
     selectedAnswer,
     opponentAnswered,
     roundWinner,

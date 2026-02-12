@@ -185,7 +185,7 @@ export default function PublicProfileScreen() {
         const opponentScore = isP1 ? m.player2_score : m.player1_score;
         const ratingChange = isP1 ? m.player1_rating_change : m.player2_rating_change;
         const matchResult: "win" | "loss" | "draw" = m.winner_id === userId ? "win"
-          : m.winner_id === null && m.ended_at && !m.forfeited_by ? "draw"
+          : playerScore === opponentScore ? "draw"
           : "loss";
 
         let opponentName = "Bot";
@@ -498,7 +498,7 @@ export default function PublicProfileScreen() {
                   onPress={() =>
                     router.push({
                       pathname: "/match/[id]",
-                      params: { id: match.id },
+                      params: { id: match.id, viewAs: id },
                     })
                   }
                   style={{ overflow: "hidden" }}
