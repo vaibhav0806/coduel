@@ -9,6 +9,7 @@ export function useSupport() {
   const [messages, setMessages] = useState<SupportMessage[]>([]);
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
+  const [status, setStatus] = useState<"open" | "resolved">("open");
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
 
   // Fetch or create conversation, load messages, reset unread
@@ -43,6 +44,7 @@ export function useSupport() {
 
       if (!mounted) return;
       setConversationId(convo.id);
+      setStatus(convo.status === "resolved" ? "resolved" : "open");
 
       // Load messages
       const { data: msgs } = await supabase
@@ -64,34 +66,31 @@ export function useSupport() {
           .eq("id", convo.id);
       }
 
-      // Subscribe to new messages via postgres_changes
+      // Subscribe to admin messages via broadcast (postgres_changes doesn't
+      // work reliably with subquery-based RLS policies)
       const channel = supabase
-        .channel(`support:${convo.id}`)
-        .on(
-          "postgres_changes",
-          {
-            event: "INSERT",
-            schema: "public",
-            table: "support_messages",
-            filter: `conversation_id=eq.${convo.id}`,
-          },
-          (payload) => {
-            const newMsg = payload.new as SupportMessage;
-            setMessages((prev) => {
-              // Deduplicate (optimistic insert may already have it)
-              if (prev.some((m) => m.id === newMsg.id)) return prev;
-              return [...prev, newMsg];
-            });
+        .channel(`support-chat:${convo.id}`)
+        .on("broadcast", { event: "new_message" }, (payload) => {
+          const newMsg = payload.payload as SupportMessage;
+          setMessages((prev) => {
+            if (prev.some((m) => m.id === newMsg.id)) return prev;
+            return [...prev, newMsg];
+          });
 
-            // If admin message came in while user is viewing, reset unread
-            if (newMsg.sender === "admin") {
-              supabase
-                .from("support_conversations")
-                .update({ unread_count: 0 })
-                .eq("id", convo!.id);
-            }
+          // Reset unread since user is viewing the chat
+          if (newMsg.sender === "admin") {
+            supabase
+              .from("support_conversations")
+              .update({ unread_count: 0 })
+              .eq("id", convo!.id);
           }
-        )
+        })
+        .on("broadcast", { event: "status_change" }, (payload) => {
+          const newStatus = payload.payload?.status;
+          if (newStatus === "resolved" || newStatus === "open") {
+            setStatus(newStatus);
+          }
+        })
         .subscribe();
 
       channelRef.current = channel;
@@ -114,6 +113,11 @@ export function useSupport() {
 
       setSending(true);
       const trimmed = body.trim();
+
+      // Optimistically reopen if resolved
+      if (status === "resolved") {
+        setStatus("open");
+      }
 
       // Insert message into DB (RLS allows user inserts)
       const { data: msg, error: insertErr } = await supabase
@@ -170,10 +174,10 @@ export function useSupport() {
 
       setSending(false);
     },
-    [user, conversationId]
+    [user, conversationId, status]
   );
 
-  return { messages, loading, sending, sendMessage };
+  return { messages, loading, sending, sendMessage, status };
 }
 
 /**

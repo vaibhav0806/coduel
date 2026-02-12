@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.95.3";
+import { sendPushNotification } from "../_shared/push.ts";
 
 // No CORS headers needed — this is called by Slack, not the app
 
@@ -87,7 +88,7 @@ Deno.serve(async (req) => {
     // Look up conversation by thread_ts
     const { data: convo, error: convoErr } = await supabase
       .from("support_conversations")
-      .select("id")
+      .select("id, user_id")
       .eq("slack_thread_ts", event.thread_ts)
       .single();
 
@@ -96,14 +97,94 @@ Deno.serve(async (req) => {
       return new Response("OK", { status: 200 });
     }
 
+    // Check for resolve/close command
+    const messageText = (event.text || "").trim().toLowerCase();
+    if (messageText === "!resolve" || messageText === "!close") {
+      // Update conversation status to resolved
+      await supabase
+        .from("support_conversations")
+        .update({ status: "resolved", updated_at: new Date().toISOString() })
+        .eq("id", convo.id);
+
+      // Insert a system message visible to the user
+      const resolveBody = "This conversation has been marked as resolved. If you need more help, just send a new message.";
+      const { data: resolveMsg } = await supabase
+        .from("support_messages")
+        .insert({
+          conversation_id: convo.id,
+          sender: "admin",
+          body: resolveBody,
+        })
+        .select("*")
+        .single();
+
+      // Increment unread so the user sees the notification
+      await supabase.rpc("increment_unread", { conv_id: convo.id });
+
+      // Broadcast to the client in real-time
+      {
+        const channel = supabase.channel(`support-chat:${convo.id}`);
+        if (resolveMsg) {
+          await channel.send({
+            type: "broadcast",
+            event: "new_message",
+            payload: resolveMsg,
+          });
+        }
+        await channel.send({
+          type: "broadcast",
+          event: "status_change",
+          payload: { status: "resolved" },
+        });
+        supabase.removeChannel(channel);
+      }
+
+      // Post confirmation reply in Slack thread
+      const slackToken = Deno.env.get("SLACK_BOT_TOKEN");
+      const channelId = Deno.env.get("SLACK_SUPPORT_CHANNEL_ID");
+      if (slackToken && channelId) {
+        await fetch("https://slack.com/api/chat.postMessage", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${slackToken}`,
+          },
+          body: JSON.stringify({
+            channel: channelId,
+            thread_ts: event.thread_ts,
+            text: "Conversation resolved.",
+          }),
+        });
+      }
+
+      // Send push notification to user
+      const { data: resolveProfile } = await supabase
+        .from("profiles")
+        .select("push_token")
+        .eq("id", convo.user_id)
+        .single();
+      if (resolveProfile?.push_token) {
+        await sendPushNotification(
+          resolveProfile.push_token,
+          "Conversation Resolved",
+          "Your support conversation has been resolved.",
+          { type: "support_resolved" }
+        );
+      }
+
+      return new Response("OK", { status: 200 });
+    }
+
     // Insert admin reply
-    const { error: insertErr } = await supabase
+    const { data: adminMsg, error: insertErr } = await supabase
       .from("support_messages")
       .insert({
         conversation_id: convo.id,
         sender: "admin",
         body: event.text,
-      });
+      })
+      .select("*")
+      .single();
 
     if (insertErr) {
       console.error("Failed to insert admin message:", insertErr);
@@ -112,6 +193,35 @@ Deno.serve(async (req) => {
 
     // Atomically increment unread_count
     await supabase.rpc("increment_unread", { conv_id: convo.id });
+
+    // Broadcast to the client in real-time
+    if (adminMsg) {
+      const channel = supabase.channel(`support-chat:${convo.id}`);
+      await channel.send({
+        type: "broadcast",
+        event: "new_message",
+        payload: adminMsg,
+      });
+      supabase.removeChannel(channel);
+    }
+
+    // Send push notification to user
+    const { data: replyProfile } = await supabase
+      .from("profiles")
+      .select("push_token")
+      .eq("id", convo.user_id)
+      .single();
+    if (replyProfile?.push_token) {
+      const truncatedBody = event.text.length > 100
+        ? event.text.substring(0, 100) + "..."
+        : event.text;
+      await sendPushNotification(
+        replyProfile.push_token,
+        "New Support Reply",
+        truncatedBody,
+        { type: "support_reply" }
+      );
+    }
 
     return new Response("OK", { status: 200 });
   } catch (err) {

@@ -84,6 +84,13 @@ export function useFollow(targetUserId: string | undefined) {
           .from("follows")
           .insert({ follower_id: currentUserId, following_id: targetUserId });
         if (error) throw error;
+
+        // Fire-and-forget push notification to the followed user
+        supabase.functions
+          .invoke("send-notification", {
+            body: { type: "follow", target_user_id: targetUserId },
+          })
+          .catch(() => {});
       }
     } catch (err) {
       // Revert on error

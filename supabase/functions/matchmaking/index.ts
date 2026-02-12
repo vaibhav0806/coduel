@@ -44,13 +44,13 @@ Deno.serve(async (req) => {
       });
     }
 
-    const { action, is_ranked } = await req.json();
+    const { action, is_ranked, language } = await req.json();
 
     switch (action) {
       case "join_queue":
-        return await handleJoinQueue(supabase, user.id, is_ranked ?? true);
+        return await handleJoinQueue(supabase, user.id, is_ranked ?? true, language ?? null);
       case "create_bot_match":
-        return await handleCreateBotMatch(supabase, user.id, is_ranked ?? true);
+        return await handleCreateBotMatch(supabase, user.id, is_ranked ?? true, language ?? null);
       case "leave_queue":
         return await handleLeaveQueue(supabase, user.id);
       default:
@@ -70,7 +70,8 @@ Deno.serve(async (req) => {
 async function handleJoinQueue(
   supabase: ReturnType<typeof createClient>,
   userId: string,
-  isRanked: boolean
+  isRanked: boolean,
+  language: string | null
 ) {
   // Fetch user profile
   const { data: profile, error: profileError } = await supabase
@@ -144,7 +145,8 @@ async function handleJoinQueue(
       opponent.user_id,
       profile.rating,
       isRanked,
-      false
+      false,
+      language
     );
 
     if (!matchData) {
@@ -202,7 +204,8 @@ async function handleJoinQueue(
 async function handleCreateBotMatch(
   supabase: ReturnType<typeof createClient>,
   userId: string,
-  isRanked: boolean
+  isRanked: boolean,
+  language: string | null
 ) {
   // Remove from queue
   await supabase.from("match_queue").delete().eq("user_id", userId);
@@ -227,7 +230,8 @@ async function handleCreateBotMatch(
     null,
     profile.rating,
     isRanked,
-    true
+    true,
+    language
   );
 
   if (!matchData) {
@@ -257,67 +261,27 @@ async function createMatch(
   player2Id: string | null,
   playerRating: number,
   isRanked: boolean,
-  isBotMatch: boolean
+  isBotMatch: boolean,
+  language: string | null
 ) {
   const difficulty = getDifficultyForRating(playerRating);
 
-  // Select 3 questions the user hasn't seen recently, at their difficulty
+  // Get seen question IDs for this player
   const { data: seenIds } = await supabase
     .from("user_question_history")
     .select("question_id")
     .eq("user_id", player1Id);
 
-  const seenQuestionIds = (seenIds ?? []).map((s) => s.question_id);
+  const seenQuestionIds = (seenIds ?? []).map((s: { question_id: string }) => s.question_id);
 
-  let questionsQuery = supabase
-    .from("questions")
-    .select("id")
-    .eq("difficulty", difficulty)
-    .limit(3);
-
-  if (seenQuestionIds.length > 0) {
-    questionsQuery = questionsQuery.not(
-      "id",
-      "in",
-      `(${seenQuestionIds.join(",")})`
-    );
-  }
-
-  let { data: questions } = await questionsQuery;
-
-  // Fallback: if not enough unseen questions, pick oldest-seen ones
-  if (!questions || questions.length < 3) {
-    const needed = 3 - (questions?.length ?? 0);
-    const existingIds = (questions ?? []).map((q) => q.id);
-
-    let fallbackQuery = supabase
-      .from("questions")
-      .select("id")
-      .eq("difficulty", difficulty)
-      .limit(needed);
-
-    if (existingIds.length > 0) {
-      fallbackQuery = fallbackQuery.not(
-        "id",
-        "in",
-        `(${existingIds.join(",")})`
-      );
-    }
-
-    const { data: fallback } = await fallbackQuery;
-    questions = [...(questions ?? []), ...(fallback ?? [])];
-  }
+  // Select 3 random questions with type+language diversity via DB function
+  const { data: questions } = await supabase.rpc("select_match_questions", {
+    p_difficulty: difficulty,
+    p_seen_ids: seenQuestionIds,
+    p_language: language,
+  });
 
   if (!questions || questions.length === 0) {
-    // Last resort: any 3 questions
-    const { data: anyQuestions } = await supabase
-      .from("questions")
-      .select("id")
-      .limit(3);
-    questions = anyQuestions ?? [];
-  }
-
-  if (questions.length === 0) {
     return null;
   }
 

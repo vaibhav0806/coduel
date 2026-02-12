@@ -90,7 +90,7 @@ export default function SupportScreen() {
       totalRounds?: string;
     }>();
 
-  const { messages, loading, sending, sendMessage } = useSupport();
+  const { messages, loading, sending, sendMessage, status } = useSupport();
   const [input, setInput] = useState("");
   const flatListRef = useRef<FlatList>(null);
   const inputRef = useRef<TextInput>(null);
@@ -115,6 +115,18 @@ export default function SupportScreen() {
       setTimeout(() => inputRef.current?.focus(), 400);
     }
   }, [questionId]);
+
+  // Show "awaiting reply" notice when user has sent a message but no admin has replied yet
+  const RESOLVE_PREFIX = "This conversation has been marked as resolved";
+  const lastAdminReply = [...messages].reverse().find(
+    (m) => m.sender === "admin" && !m.body.startsWith(RESOLVE_PREFIX)
+  );
+  const lastUserMessage = [...messages].reverse().find((m) => m.sender === "user");
+  const awaitingReply =
+    status !== "resolved" &&
+    !!lastUserMessage &&
+    (!lastAdminReply ||
+      new Date(lastUserMessage.created_at) > new Date(lastAdminReply.created_at));
 
   const handleSend = async () => {
     const text = input.trim();
@@ -176,7 +188,51 @@ export default function SupportScreen() {
           onLayout={() =>
             flatListRef.current?.scrollToEnd({ animated: false })
           }
+          ListFooterComponent={
+            awaitingReply ? (
+              <View
+                style={{
+                  alignItems: "center",
+                  paddingVertical: 16,
+                  paddingHorizontal: 24,
+                }}
+              >
+                <Text
+                  style={{
+                    fontSize: 13,
+                    color: "#6B7280",
+                    textAlign: "center",
+                    lineHeight: 18,
+                  }}
+                >
+                  Someone from the team will get back to you within 24 hours
+                </Text>
+              </View>
+            ) : null
+          }
         />
+      )}
+
+      {/* Resolved banner */}
+      {status === "resolved" && (
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "center",
+            paddingVertical: 10,
+            paddingHorizontal: 16,
+            backgroundColor: "rgba(57, 255, 20, 0.06)",
+            borderTopWidth: 1,
+            borderTopColor: "rgba(57, 255, 20, 0.15)",
+            gap: 8,
+          }}
+        >
+          <Ionicons name="checkmark-circle" size={16} color="#39FF14" />
+          <Text style={{ fontSize: 13, color: "#39FF14", opacity: 0.85 }}>
+            This conversation has been resolved
+          </Text>
+        </View>
       )}
 
       {/* Input bar */}

@@ -40,20 +40,11 @@ export const createMatchmakingChannel = (userId: string) => {
 
 // --- Matchmaking (direct DB queries, no Edge Functions) ---
 
-function shuffleAndPick<T>(arr: T[], count: number): T[] {
-  const shuffled = [...arr];
-  for (let i = shuffled.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
-  }
-  return shuffled.slice(0, count);
-}
-
 async function selectQuestions(
   userId: string,
   difficulty: number,
   language: string | null = null,
-  topic: string | null = null
+  _topic: string | null = null
 ) {
   // Get IDs of questions this user has already seen
   const { data: seen } = await supabase
@@ -63,101 +54,21 @@ async function selectQuestions(
 
   const seenIds = (seen ?? []).map((s) => s.question_id);
 
-  function buildQuery(minD: number, maxD: number, excludeIds: string[], limit: number) {
-    let q = supabase
-      .from("questions")
-      .select("id, question_type")
-      .gte("difficulty", minD)
-      .lte("difficulty", maxD)
-      .limit(limit);
-    if (language) q = q.ilike("language", language);
-    if (topic) q = q.eq("topic", topic);
-    if (excludeIds.length > 0) {
-      q = q.not("id", "in", `(${excludeIds.join(",")})`);
-    }
-    return q;
+  // Use DB function for type+language diverse random selection
+  const { data: questions, error } = await supabase.rpc("select_match_questions", {
+    p_difficulty: difficulty,
+    p_seen_ids: seenIds,
+    p_language: language,
+    p_count: 5,
+  });
+
+  if (error) {
+    console.error("[Questions] RPC error:", error);
   }
 
-  // --- Phase 1: Fetch non-MCQ questions separately (target: 3) ---
-  // This guarantees type diversity — querying separately avoids MCQs
-  // dominating the pool due to insertion-order bias.
-  let nonMcqPool: { id: string; question_type: string }[] = [];
-
-  // Exact difficulty, unseen, non-MCQ
-  {
-    const { data } = await buildQuery(difficulty, difficulty, seenIds, 10)
-      .neq("question_type", "mcq");
-    nonMcqPool = data ?? [];
-  }
-
-  // Expand to ±1 difficulty if needed
-  if (nonMcqPool.length < 3) {
-    const have = nonMcqPool.map((q) => q.id);
-    const { data } = await buildQuery(
-      Math.max(1, difficulty - 1), Math.min(4, difficulty + 1),
-      [...seenIds, ...have], 10
-    ).neq("question_type", "mcq");
-    nonMcqPool = [...nonMcqPool, ...(data ?? [])];
-  }
-
-  // Allow seen non-MCQ if still not enough
-  if (nonMcqPool.length < 3) {
-    const have = nonMcqPool.map((q) => q.id);
-    const { data } = await buildQuery(1, 4, have, 10)
-      .neq("question_type", "mcq");
-    nonMcqPool = [...nonMcqPool, ...(data ?? [])];
-  }
-
-  const nonMcqPicks = shuffleAndPick(nonMcqPool, Math.min(3, nonMcqPool.length));
-  console.log("[Questions] Non-MCQ picks:", nonMcqPicks.length, "from pool of", nonMcqPool.length);
-
-  // --- Phase 2: Fetch remaining questions for other slots ---
-  const remainingNeeded = 5 - nonMcqPicks.length;
-  const excludeFromRest = [...seenIds, ...nonMcqPicks.map((q) => q.id)];
-
-  let restPool: { id: string; question_type: string }[] = [];
-
-  // Exact difficulty, unseen
-  {
-    const { data } = await buildQuery(difficulty, difficulty, excludeFromRest, 20);
-    restPool = data ?? [];
-  }
-
-  // Expand to ±1 if needed
-  if (restPool.length < remainingNeeded) {
-    const have = restPool.map((q) => q.id);
-    const { data } = await buildQuery(
-      Math.max(1, difficulty - 1), Math.min(4, difficulty + 1),
-      [...excludeFromRest, ...have], 20
-    );
-    restPool = [...restPool, ...(data ?? [])];
-  }
-
-  // Allow seen if still not enough
-  if (restPool.length < remainingNeeded) {
-    const have = restPool.map((q) => q.id);
-    const { data } = await buildQuery(difficulty, difficulty,
-      [...nonMcqPicks.map((q) => q.id), ...have], 20
-    );
-    restPool = [...restPool, ...(data ?? [])];
-  }
-
-  const restPicks = shuffleAndPick(restPool, remainingNeeded);
-
-  // Combine and shuffle
-  let final = shuffleAndPick([...nonMcqPicks, ...restPicks], 5);
-
-  // Last resort fallback
-  if (final.length < 5) {
-    const have = final.map((q) => q.id);
-    let q = supabase.from("questions").select("id, question_type").limit(20);
-    if (have.length > 0) q = q.not("id", "in", `(${have.join(",")})`);
-    const { data } = await q;
-    final = [...final, ...shuffleAndPick(data ?? [], 5 - final.length)];
-  }
-
-  console.log("[Questions] Final selection:", JSON.stringify(final.map(q => q.question_type)));
-  return final;
+  const result = (questions ?? []).map((q: { id: string }) => ({ id: q.id, question_type: "" }));
+  console.log("[Questions] Selected", result.length, "questions via RPC");
+  return result;
 }
 
 export async function createBotMatch(

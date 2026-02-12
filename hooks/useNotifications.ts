@@ -69,6 +69,13 @@ export function useNotifications({
           data?.type === "league_reminder"
         ) {
           router.navigate("/(tabs)");
+        } else if (
+          data?.type === "support_reply" ||
+          data?.type === "support_resolved"
+        ) {
+          router.navigate("/support");
+        } else if (data?.type === "follow" && data?.follower_id) {
+          router.navigate({ pathname: "/user/[id]", params: { id: data.follower_id } });
         }
       }
     );

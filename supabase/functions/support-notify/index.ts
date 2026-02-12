@@ -68,7 +68,8 @@ Deno.serve(async (req) => {
       return jsonResponse({ error: "Support unavailable" }, 503);
     }
 
-    let threadTs = convo.slack_thread_ts;
+    // Start a new Slack thread if conversation was resolved
+    let threadTs = convo.status === "resolved" ? null : convo.slack_thread_ts;
 
     if (!threadTs) {
       // First message: create a new thread
@@ -92,11 +93,12 @@ Deno.serve(async (req) => {
 
       threadTs = slackData.ts;
 
-      // Save thread_ts to conversation
+      // Save thread_ts to conversation and reopen if resolved
       await supabase
         .from("support_conversations")
         .update({
           slack_thread_ts: threadTs,
+          status: "open",
           updated_at: new Date().toISOString(),
         })
         .eq("id", conversation_id);
@@ -123,7 +125,7 @@ Deno.serve(async (req) => {
 
       await supabase
         .from("support_conversations")
-        .update({ updated_at: new Date().toISOString() })
+        .update({ status: "open", updated_at: new Date().toISOString() })
         .eq("id", conversation_id);
     }
 

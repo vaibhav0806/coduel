@@ -4,6 +4,15 @@ import { Ionicons } from "@expo/vector-icons";
 import { useState } from "react";
 import type { QuestionTypeProps } from "./types";
 
+function shuffle(arr: number[]): number[] {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
 export function ReorderOptions({
   question,
   selectedAnswer,
@@ -16,8 +25,8 @@ export function ReorderOptions({
   const [slots, setSlots] = useState<(number | null)[]>(
     Array(totalSlots).fill(null)
   );
-  const [availableChips, setAvailableChips] = useState<number[]>(
-    question.options.map((_, i) => i)
+  const [availableChips, setAvailableChips] = useState<number[]>(() =>
+    shuffle(question.options.map((_, i) => i))
   );
   const submitted = selectedAnswer !== null;
   const correctArr = Array.isArray(correctAnswer) ? correctAnswer : [];
